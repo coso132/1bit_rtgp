@@ -48,7 +48,7 @@ positive Z axis points "outside" the screen
                           Z
 */
 
-
+using namespace std;
 // Std. Includes
 #include <string>
 
@@ -72,10 +72,14 @@ positive Z axis points "outside" the screen
     #error windows.h was included!
 #endif
 
+// #include <iostream>
+// #include <ostream>
 // classes developed during lab lectures to manage shaders, to load models, and for FPS camera
 #include <utils/shader.h>
 #include <utils/model.h>
 #include <utils/camera.h>
+#include <utils/scene.h>
+
 
 // we load the GLM classes used in the application
 #include <glm/glm.hpp>
@@ -87,10 +91,16 @@ positive Z axis points "outside" the screen
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
 
+//MY FUNCTIONS
+GLFWwindow* setup_openGL(int* width, int* height);
+
 // dimensions of application's window
+//TODO: figure out how to change screen resolution but keep render resolution
+// ideally screen resolution would be 2^n times render resolution 
 GLuint screenWidth = 1200, screenHeight = 900;
 
 // the rendering steps used in the application
+//TODO: learn ts PROPERLY like goddamn, you prolly need more render passes for lighting and edge-detection anyways
 enum render_passes{ SHADOWMAP, RENDER};
 
 // callback functions for keyboard and mouse events
@@ -100,6 +110,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void apply_camera_movements();
 
 // index of the current shader subroutine (= 0 in the beginning)
+//TODO: figure out what variables are justified to be global and what should be in Scenes or functions
 GLuint current_subroutine = 0;
 // a vector for all the shader subroutines names used and swapped in the application
 vector<std::string> shaders;
@@ -143,6 +154,7 @@ GLboolean wireframe = GL_FALSE;
 glm::mat4 view = glm::mat4(1.0f);
 
 // Model and Normal transformation matrices for the objects in the scene: we set to identity
+//TODO this bullshit has to go frfr
 glm::mat4 sphereModelMatrix = glm::mat4(1.0f);
 glm::mat3 sphereNormalMatrix = glm::mat3(1.0f);
 glm::mat4 cubeModelMatrix = glm::mat4(1.0f);
@@ -176,57 +188,18 @@ vector<GLint> textureID;
 GLfloat repeat = 1.0;
 // variables used to store uniform location inside shaders
 GLint lightDirLocation, kdLocation, alphaLocation, f0Location, textureLocation, repeatLocation, shadowLocation;
-
+//TODO end of bullshit
 /////////////////// MAIN function ///////////////////////
-int main()
-{
-    // Initialization of OpenGL context using GLFW
-    glfwInit();
-    // We set OpenGL specifications required for this application
-    // In this case: 4.1 Core
-    // If not supported by your graphics HW, the context will not be created and the application will close
-    // N.B.) creating GLAD code to load extensions, try to take into account the specifications and any extensions you want to use,
-    // in relation also to the values indicated in these GLFW commands
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    // we set if the window is resizable
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-
-    // we create the application's window
-    GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, "RTGP_lecture07a", nullptr, nullptr);
-    if (!window)
-    {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-
-    // we put in relation the window and the callbacks
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-
-    // we disable the mouse cursor
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    // GLAD tries to load the context set by GLFW
-    if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize OpenGL context" << std::endl;
-        return -1;
-    }
-
-    // we define the viewport dimensions
+int main(){
     int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
-
-    // we enable Z test
-    glEnable(GL_DEPTH_TEST);
-
-    //the "clear" color for the frame buffer
-    glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
+    GLFWwindow* window = setup_openGL(&width, &height);
+    if (!window) return -1;
+    return 0;
+}
+int main_old(){
+    int width, height;
+    GLFWwindow* window = setup_openGL(&width, &height);
+    if (!window) return -1;
 
     // we create the Shader Program for the creation of the shadow map
     Shader shadow_shader("shaders/19_shadowmap.vert", "shaders/20_shadowmap.frag");
@@ -243,12 +216,14 @@ int main()
     textureID.push_back(LoadTexture("textures/UV_Grid_Sm.png"));
     textureID.push_back(LoadTexture("textures/SoilCracked.png"));
 
+
     // we load the model(s) (code of Model class is in include/utils/model.h)
     Model cubeModel("models/cube.obj");
     Model sphereModel("models/sphere.obj");
     Model bunnyModel("models/bunny_lp.obj");
     Model planeModel("models/plane.obj");
 
+    //TODO learn ts well
     /////////////////// CREATION OF BUFFER FOR THE  DEPTH MAP /////////////////////////////////////////
     // buffer dimension: too large -> performance may slow down if we have many lights; too small -> strong aliasing
     const GLuint SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -284,11 +259,13 @@ int main()
 
 
     // Projection matrix of the camera: FOV angle, aspect ratio, near and far planes
-    glm::mat4 projection = glm::perspective(45.0f, (float)screenWidth/(float)screenHeight, 0.1f, 10000.0f);
+    glm::mat4 projection = glm::perspective(45.0f, (float)width/(float)height, 0.1f, 10000.0f);
+
 
     // Rendering loop: this code is executed at each frame
     while(!glfwWindowShouldClose(window))
     {
+        // TODO fps/deltatime calculation
         // we determine the time passed from the beginning
         // and we calculate time difference between current frame rendering and the previous one
         currentFrame = glfwGetTime();
@@ -300,7 +277,8 @@ int main()
         // we apply FPS camera movements
         apply_camera_movements();
 
-        /////////////////// STEP 1 - SHADOW MAP: RENDERING OF SCENE FROM LIGHT POINT OF VIEW ////////////////////////////////////////////////
+        //TODO DIRECTIONAL LIGHT!!!
+        ///////////////// STEP 1 - SHADOW MAP: RENDERING OF SCENE FROM LIGHT POINT OF VIEW ////////////////////////////////////////////////
         // we set view and projection matrix for the rendering using light as a camera
         // for a directional light, the projection is orthographic. For point lights, we should use a perspective projection
         lightProjection = glm::ortho(-frustumSize, frustumSize, -frustumSize, frustumSize, near_plane, far_plane);
@@ -387,6 +365,44 @@ int main()
 }
 
 
+GLFWwindow* setup_openGL(int* width, int* height){
+    // Initialization of OpenGL context using GLFW
+    glfwInit();
+    // We set OpenGL specifications required for this application
+    // In this case: 4.1 Core
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    // we set if the window is resizable
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+    // we create the application's window
+    GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, "RTGP_lecture07a", nullptr, nullptr);
+    if (!window){
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return window;
+    }
+    glfwMakeContextCurrent(window);
+    // we put in relation the window and the callbacks
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    // we disable the mouse cursor
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    // GLAD tries to load the context set by GLFW
+    if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress)){
+        std::cout << "Failed to initialize OpenGL context" << std::endl;
+        return window;
+    }
+    // we define the viewport dimensions
+    // int width, height;
+    glfwGetFramebufferSize(window, width, height);
+    // we enable Z test
+    glEnable(GL_DEPTH_TEST);
+    //the "clear" color for the frame buffer
+    glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
+    return window;
+}
 //////////////////////////////////////////
 // we render the objects. We pass also the current rendering step, and the depth map generated in the first step, which is used by the shaders of the second step
 void RenderObjects(Shader &shader, Model &planeModel, Model &cubeModel, Model &sphereModel, Model &bunnyModel, GLint render_pass, GLuint depthMap)
