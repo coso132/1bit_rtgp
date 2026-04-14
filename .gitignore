@@ -1,3 +1,11 @@
+# External Libraries
+libs/**
+
+# Generic Texture PNGs
+textures/**/*.png
+
+
+## DEFAULT GITHUB C++ GITIGNORE
 # Prerequisites
 *.d
 
