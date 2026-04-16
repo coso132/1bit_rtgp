@@ -7,10 +7,13 @@
 #include <utils/model.h>
 #include <utils/shader.h>
 #include <utils/camera.h>
+// #include <glm/glm.hpp>
+// #include <matrix_inverse.hpp>
 
 enum Material {
+    TEST,
     WOOD,
-    something_else,
+    SOMETHING_ELSE,
 };
 
 
@@ -19,14 +22,36 @@ class Object {
 public:
     // world coordinates
     glm::vec3 pos;
+    glm::mat4 model_matrix;
     // model of the object
-    Model model;
     // shader program to render this object with
     // Shader shader;//not needed?
     Material material;
-    // ... existing members ...
+    Model model;
 
-    // Object(const Object& other) = default;
+    //constructor takes position, string for model filepath, and material
+    Object(glm::vec3 pos, const string& filepath, Material material) 
+        : pos(pos), material(material), model(filepath) {
+        this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
+    }
+
+    Object(glm::vec3 pos, const string& filepath, Material material, float scale) 
+        : pos(pos), material(material), model(filepath) {
+        this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
+        this->model_matrix = glm::scale(this->model_matrix, glm::vec3(scale));
+    }
+    // Delete copy semantics - Object is MOVE-ONLY
+    Object(const Object&) = delete;
+    Object& operator=(const Object&) = delete;
+
+    // Move semantics
+    Object(Object&&) = default;
+    Object& operator=(Object&&) = default;
+
+    void update_position(glm::vec3 new_pos) {
+        this->pos = new_pos;
+        this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
+    }
 };
 
 
@@ -34,18 +59,29 @@ public:
 class Scene {
 public:
     // we can have a shader for each material, and we can switch between them when rendering the objects
-    static Shader woodShader;
-    static Shader something_else_shader;
-    static Shader materialShaders[];
+    // static Shader test_shader;
+    // static Shader wood_shader; 
+    // static Shader something_else_shader;
+    // static Shader* materialShaders[SOMETHING_ELSE + 1];
+    static Scene load_test_scene();
 
-    vector<Object*> objects;
+    // Projection matrix: FOV angle, aspect ratio, near and far planes
+    static constexpr float FOV = 45.0f;
+    static constexpr float ASPECT_RATIO = 16.0f/9.0f;
+    static constexpr float NEAR_PLANE = 0.1f;
+    static constexpr float FAR_PLANE = 10000.0f;
+    static glm::mat4 projection_matrix;
+
+    Shader current_shader = Shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
+
+    vector<Object> objects;
     Camera camera;
     // vector<Light> lights;
     // Light light;
 
-   // constructor
-   Scene(vector<Object*> objects, Camera camera)
-    :objects(objects), camera(camera) {
+   // constructor (takes ownership of objects via move semantics)
+   Scene(vector<Object>&& objects, Camera camera)
+    :objects(std::move(objects)), camera(camera) {
         //sort objects by material
         // std::sort(this->objects.begin(), this->objects.end(), [](const Object& a, const Object& b) {
         //     return a.material < b.material;
@@ -53,93 +89,36 @@ public:
     }
 
     // rendering of the whole scene
-    void Draw() {
+    void full_render() {
         // we render the objects in the order of their material, so that we minimize the number of shader switches
         // (we can do this because we have sorted the vector of objects by material in the constructor)
-        Material current_material = objects[0]->material;
-        for (Object* object : objects) {
-            if (object->material != current_material) {
-                current_material = object->material;
-                materialShaders[current_material].Use();
-            }
+        // Shader current_shader = Shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
+        current_shader.Use();
+        // Material current_material = objects[0].material;
+        // cycle object reference in objects vector
+        //TODO optimize by switching shader only when material changes, but for now we just use the same shader for all objects
+        // cycle through references by index of objects in vector, necessaary because Object is move-only
+        for (GLuint i = 0; i < objects.size(); i++) {
+            // is this correct? we want to avoid copying the Object, but we need to access its members, so we take a pointer to it
+            Object* object = &objects[i];
+            // if (object->material != current_material) {
+            //     current_material = object->material;
+            //     // materialShaders[current_material]->Use();
+            // }
+            glm::mat4 model_matrix = object->model_matrix;
+            current_shader.set_uniformMatrix4fv("modelMatrix", model_matrix);
+            glm::mat4 view_matrix = camera.GetViewMatrix();
+            current_shader.set_uniformMatrix4fv("viewMatrix", view_matrix);
+            glm::mat4 projection_matrix = this->projection_matrix;
+            current_shader.set_uniformMatrix4fv("projectionMatrix", projection_matrix);
+            glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(view_matrix * model_matrix)));
+            current_shader.set_uniformMatrix3fv("normalMatrix", normal_matrix);
+            glm::vec3 light_dir = glm::normalize(glm::vec3(-1.0f, -1.0f, 0.0f));
+            current_shader.set_uniform3fv("lightDir", light_dir);
             object->model.Draw();
         }
-        
     }
-    /*
-    //TODO this bs is to be respect unfortunately </3
-    // // We want Mesh to be a move-only class. We delete copy constructor and copy assignment
-    // // see:
-    // // https://docs.microsoft.com/en-us/cpp/cpp/constructors-cpp?view=vs-2019
-    // // https://learn.microsoft.com/en-us/cpp/cpp/copy-constructors-and-copy-assignment-operators-cpp?view=msvc-170
-    // // https://en.cppreference.com/w/cpp/language/copy_constructor
-    // // https://en.cppreference.com/w/cpp/language/as_operator.html
-    // // https://www.geeksforgeeks.org/preventing-object-copy-in-cpp-3-different-ways/
-    // Mesh(const Mesh& copy) = delete; //disallow copy
-    // Mesh& operator=(const Mesh&) = delete;
-
-    // Constructor
-    // We use initializer list and std::move in order to avoid a copy of the arguments
-    // This constructor empties the source vectors (vertices and indices)
- 
-
-    //TODO this bs is to be respect unfortunately </3
-    // // We implement a user-defined move constructor and move assignment
-    // // see:
-    // // https://docs.microsoft.com/en-us/cpp/cpp/move-constructors-and-move-assignment-operators-cpp?view=vs-2019
-    // // https://en.cppreference.com/w/cpp/language/move_constructor
-    // // https://en.cppreference.com/w/cpp/language/move_assignment
-    // // https://www.learncpp.com/cpp-tutorial/15-3-move-constructors-and-move-assignment/
-
-    // // Move constructor
-    // // The source object of a move constructor is not expected to be valid after the move.
-    // // In our case it will no longer imply ownership of the GPU resources and its vectors will be empty.
-    // Mesh(Mesh&& move) noexcept
-    //     // Calls move for both vectors, which internally consists of a simple pointer swap between the new instance and the source one.
-    //     : vertices(std::move(move.vertices)), indices(std::move(move.indices)), VAO(move.VAO), VBO(move.VBO), EBO(move.EBO)
-    // {
-    //     move.VAO = 0; // We *could* set VBO and EBO to 0 too,
-    //     // but since we bring all the 3 values around we can use just one of them to check ownership of the 3 resources.
-    // }
-
-    // // Move assignment
-    // Mesh& operator=(Mesh&& move) noexcept
-    // {
-    //     // calls the function which will delete (if needed) the GPU resources for this instance
-    //     freeGPUresources();
-
-    //     if (move.VAO) // source instance has GPU resources
-    //     {
-    //         this->vertices = std::move(move.vertices);
-    //         this->indices = std::move(move.indices);
-    //         this->VAO = move.VAO;
-    //         this->VBO = move.VBO;
-    //         this->EBO = move.EBO;
-
-    //         move.VAO = 0;
-    //     }
-    //     else // source instance was already invalid
-    //     {
-    //         this->VAO = 0;
-    //     }
-    //     return *this;
-    // }
-
-    // // destructor
-    // ~Mesh() noexcept
-    // {
-    //     // calls the function which will delete (if needed) the GPU resources
-    //     freeGPUresources();
-    // }
-
-    //////////////////////////////////////////
-    */
 private:
 
-    // void freeGPUresources(){}
 };
 
-// Define static members outside the class
-Shader Scene::woodShader = Shader("shaders/wood.vs", "shaders/wood.fs");
-Shader Scene::something_else_shader = Shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
-Shader Scene::materialShaders[] = {Scene::woodShader, Scene::something_else_shader};

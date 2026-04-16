@@ -20,6 +20,9 @@ using namespace std;
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glad/glad.h>
 
 /////////////////// SHADER class ///////////////////////
 class Shader
@@ -103,6 +106,17 @@ public:
 
     // We delete the Shader Program when application closes
     void Delete() { glDeleteProgram(this->Program); }
+    
+    void set_uniform1f(const string &name, float value) const{
+        glUniform1f(glGetUniformLocation(this->Program, name.c_str()), value);}
+    void set_uniform2fv(const string &name, const glm::vec2& value) const{
+        glUniform2fv(glGetUniformLocation(this->Program, name.c_str()), 1, glm::value_ptr(value));}
+    void set_uniform3fv(const string &name, const glm::vec3& value) const{
+        glUniform3fv(glGetUniformLocation(this->Program, name.c_str()), 1, glm::value_ptr(value));}
+    void set_uniformMatrix3fv(const string &name, const glm::mat3& value) const{
+        glUniformMatrix3fv(glGetUniformLocation(this->Program, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));}
+    void set_uniformMatrix4fv(const string &name, const glm::mat4& value) const{
+        glUniformMatrix4fv(glGetUniformLocation(this->Program, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));}
 
 private:
     //////////////////////////////////////////

@@ -4,7 +4,7 @@
 // the number used for the location in the layout qualifier is the position of the vertex attribute
 // as defined in the Mesh class
 layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 position;
+layout (location = 1) in vec3 normal;
 
 // model matrix
 uniform mat4 modelMatrix;
@@ -14,14 +14,22 @@ uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 // normals transformation matrix (= transpose of the inverse of the model-view matrix)
 uniform mat3 normalMatrix;
+// directional light direction in world coordinates
+uniform vec3 lightDir;
 // the transformed normal is set as an output variable, to be "passed" to the fragment shader
 // this means that the normal values in each vertex will be interpolated on each fragment created during rasterization between two vertices
 out vec3 N;
+// the transformed light direction is set as an output variable, to be "passed" to the fragment shader
+out vec3 L;
 
 void main()
 {
     // transformations are applied to each vertex
-    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0f);
+    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
     // the normal is transformed using the normal matrix and passed to the fragment shader
     N = normalize(normalMatrix * normal);
+    // the light direction is transformed using the view matrix and passed to the fragment shader
+    // this will be used to compute the diffuse component of the lighting in the fragment shader
+    vec3 lightDirView = mat3(viewMatrix) * (-lightDir);
+    L = normalize(lightDirView);
 }

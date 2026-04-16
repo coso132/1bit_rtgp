@@ -17,13 +17,16 @@ Universita' degli Studi di Milano
 // we use GLM to create the view matrix and to manage camera transformations
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glad/glad.h>
 
 // possible camera movements
 enum Camera_Movement {
     FORWARD,
     BACKWARD,
     LEFT,
-    RIGHT
+    RIGHT,
+    UP,
+    DOWN
 };
 
 // Default camera settings
@@ -32,7 +35,7 @@ const GLfloat YAW        = -90.0f; //Y
 const GLfloat PITCH      =  0.0f; //X
 
 // speed of camera movement
-const GLfloat SPEED      =  3.0f;
+const GLfloat SPEED      =  5.0f;
 // speed compensation in case of diagonal camera movement (= 1/sqrt(2))
 const GLfloat DIAGONAL_COMPENSATION = 0.70710678f;
 // parameter to weight mouse movement
@@ -97,6 +100,10 @@ public:
         // = 1/sqrt(2) if two keys are pressed for a diagonal movement
         GLfloat velocity = this->MovementSpeed * deltaTime * this->MovementCompensation;
 
+        if (direction == UP)
+            this->Position += this->Up * velocity;
+        if (direction == DOWN)
+            this->Position -= this->Up * velocity;
         if (direction == FORWARD)
             this->Position += (this->onGround ? this->WorldFront : this->Front) * velocity;
         if (direction == BACKWARD)

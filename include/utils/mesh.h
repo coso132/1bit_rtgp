@@ -29,6 +29,8 @@ using namespace std;
 
 // Std. Includes
 #include <vector>
+#include <glad/glad.h>
+#include <glm/glm.hpp>
 
 // data structure for vertices
 struct Vertex {

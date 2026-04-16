@@ -23,7 +23,8 @@ CXXFLAGS  = -g -O0 -x c++ -Wall -Wno-invalid-offsetof -std=c++11 -I$(IDIR)
 # linker flags:
 LDFLAGS = -L$(LDIR) -lglfw3 -lassimp -lz -lminizip -lkubazip -lpoly2tri -lpolyclipping -ldraco -lpugixml
 
-SOURCES = include/glad/glad.c $(FILENAME).cpp
+# SOURCES = include/glad/glad.c scenes.cpp $(FILENAME).cpp 
+SOURCES = include/glad/glad.c $(FILENAME).cpp scene.cpp
 
 TARGET = $(FILENAME).out
 
