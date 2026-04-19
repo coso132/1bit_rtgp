@@ -4,6 +4,8 @@
 
 // Std. Includes
 // #include <vector>
+#include <variant>
+#include <map>
 #include <utils/model.h>
 #include <utils/shader.h>
 #include <utils/camera.h>
@@ -11,8 +13,9 @@
 // #include <matrix_inverse.hpp>
 
 enum Material {
-    TEST,
+    SIMPLE,
     WOOD,
+    COMPLEX,
     SOMETHING_ELSE,
 };
 
@@ -72,8 +75,6 @@ public:
     static constexpr float FAR_PLANE = 10000.0f;
     static glm::mat4 projection_matrix;
 
-    Shader current_shader = Shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
-
     vector<Object> objects;
     Camera camera;
     // vector<Light> lights;
@@ -88,33 +89,47 @@ public:
         // });
     }
 
+    using UniformValue = std::variant<float, glm::vec2, glm::vec3, glm::mat3, glm::mat4>;
     // rendering of the whole scene
-    void full_render() {
-        // we render the objects in the order of their material, so that we minimize the number of shader switches
-        // (we can do this because we have sorted the vector of objects by material in the constructor)
-        // Shader current_shader = Shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
-        current_shader.Use();
-        // Material current_material = objects[0].material;
-        // cycle object reference in objects vector
-        //TODO optimize by switching shader only when material changes, but for now we just use the same shader for all objects
-        // cycle through references by index of objects in vector, necessaary because Object is move-only
+    // take in the shader to render the scene with, and a map to assign every uniform in the shader to the corresponding value in the scene (e.g. light direction, camera position, etc...)
+    void full_render(Shader* shader, const std::map<std::string, UniformValue>& uniform_values, bool obj_based_uniform_assignment = false) {
+        shader->Use();
+        // set all the custom uniform values in the shader
+        for (const auto& [name, value] : uniform_values) {
+            std::visit([&](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, float>)
+                    shader->set_uniform1f(name, arg);
+                else if constexpr (std::is_same_v<T, glm::vec2>)
+                    shader->set_uniform2fv(name, arg);
+                else if constexpr (std::is_same_v<T, glm::vec3>)
+                    shader->set_uniform3fv(name, arg);
+                else if constexpr (std::is_same_v<T, glm::mat3>)
+                    shader->set_uniformMatrix3fv(name, arg);
+                else if constexpr (std::is_same_v<T, glm::mat4>)
+                    shader->set_uniformMatrix4fv(name, arg);
+            }, value);
+        }
+        // render objects
         for (GLuint i = 0; i < objects.size(); i++) {
-            // is this correct? we want to avoid copying the Object, but we need to access its members, so we take a pointer to it
+            if (obj_based_uniform_assignment) {
+                if (objects[i].material == COMPLEX)
+                    {shader->set_uniform1f("fill_in", 1.0f);}
+                else 
+                    {shader->set_uniform1f("fill_in", 0.0f);}
+                shader->set_uniform1f("object_id_in", (float)(i+1));
+                shader->set_uniform1f("object_id_in", (float)(i+1));
+                shader->set_uniform3fv("object_pos_in", objects[i].pos);
+            }
             Object* object = &objects[i];
-            // if (object->material != current_material) {
-            //     current_material = object->material;
-            //     // materialShaders[current_material]->Use();
-            // }
             glm::mat4 model_matrix = object->model_matrix;
-            current_shader.set_uniformMatrix4fv("modelMatrix", model_matrix);
+            shader->set_uniformMatrix4fv("modelMatrix", model_matrix);
             glm::mat4 view_matrix = camera.GetViewMatrix();
-            current_shader.set_uniformMatrix4fv("viewMatrix", view_matrix);
+            shader->set_uniformMatrix4fv("viewMatrix", view_matrix);
             glm::mat4 projection_matrix = this->projection_matrix;
-            current_shader.set_uniformMatrix4fv("projectionMatrix", projection_matrix);
+            shader->set_uniformMatrix4fv("projectionMatrix", projection_matrix);
             glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(view_matrix * model_matrix)));
-            current_shader.set_uniformMatrix3fv("normalMatrix", normal_matrix);
-            glm::vec3 light_dir = glm::normalize(glm::vec3(-1.0f, -1.0f, 0.0f));
-            current_shader.set_uniform3fv("lightDir", light_dir);
+            shader->set_uniformMatrix3fv("normalMatrix", normal_matrix);
             object->model.Draw();
         }
     }

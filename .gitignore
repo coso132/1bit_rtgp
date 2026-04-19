@@ -4,8 +4,13 @@ lecture03.cpp
 # External Libraries
 libs/**
 
-# Generic Texture PNGs
+# Generic files used for 3d
 textures/**/*.png
+models/**/*.png
+models/**/*.obj
+**/*.zip
+**/*.mtl
+**/*.jpg
 
 
 ## DEFAULT GITHUB C++ GITIGNORE

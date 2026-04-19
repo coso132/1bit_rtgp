@@ -28,11 +28,11 @@ using namespace std;
 // dimensions of application's window
 //TODO: figure out how to change screen resolution but keep render resolution
 // ideally screen resolution would be 2^n times render resolution 
-GLuint screenWidth = 1280, screenHeight = 720;
-GLuint renderWidth = 320, renderHeight = 180;
-// the rendering steps used in the application
-//TODO: learn ts PROPERLY like goddamn, you prolly need more render passes for lighting and edge-detection anyways
-enum render_passes{ LIGHTING, SHADOWMAP, EDGE, RENDER};
+GLuint screenWidth = 1920, screenHeight = 1080;
+GLuint factor = 50;
+GLuint renderWidth = 16*factor, renderHeight = 9*factor;
+// GLuint renderWidth = 2560, renderHeight = 1440;
+// GLuint renderWidth = 640, renderHeight = 360;
 
 // callback functions for keyboard and mouse events
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
@@ -52,6 +52,8 @@ bool firstMouse = true;
 GLFWwindow* setup_openGL(int* width, int* height);
 void setup_material_shaders();
 Scene load_test_scene();
+int create_quad_vao(GLuint* vao, GLuint* vbo);
+int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer);
 //fps calculations
 GLfloat fps, current_time, last_time,delta_time = 1.0f;
 void update_deltatime();
@@ -80,56 +82,49 @@ int main(){
     GLFWwindow* window = setup_openGL(&width, &height);
     if (!window) return -1;
 
-    // generate texture for color attachment (low resolution)
-    GLuint low_res_texture;
-    glGenTextures(1, &low_res_texture);
-    glBindTexture(GL_TEXTURE_2D, low_res_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderWidth, renderHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    // rendering shaders
+    // setup lighting 
+    Shader lighting_shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
+    std::map<std::string, Scene::UniformValue> lighting_uniforms;
+    glm::vec3 light_dir = glm::normalize(glm::vec3(-1.0f, -1.0f, 0.0f));
+    lighting_uniforms["lightDir"] = light_dir;
+    GLuint lighting_fb, lighting_tex, lighting_db;
+    if (create_framebuffer(&lighting_fb, &lighting_tex, &lighting_db) != 0) {
+        std::cout << "Failed to create framebuffer!" << std::endl;
+        return -1;}
 
-    // set filtering to NEAREST to avoid blurring the image when we will render it on the screen
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    // wrap clamp
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // setup edge accentuation 
+    Shader edge_shader("shaders/edge_accentuate.vert", "shaders/edge_accentuate.frag");
+    std::map<std::string, Scene::UniformValue> edge_uniforms;
+    GLuint edge_fb, edge_tex, edge_db;
+    if (create_framebuffer(&edge_fb, &edge_tex, &edge_db) != 0) {
+        std::cout << "Failed to create framebuffer!" << std::endl;
+        return -1;}
 
-    //create low-resolution framebuffer for offscreen rendering
-    GLuint low_res_framebuffer;
-    glGenFramebuffers(1, &low_res_framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, low_res_framebuffer);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, low_res_texture, 0);
+    // setup edge detection shader 
+    Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect.frag");
+    GLuint edge_detect_fb, edge_detect_tex, edge_detect_db;
+    if (create_framebuffer(&edge_detect_fb, &edge_detect_tex, &edge_detect_db) != 0) {
+        std::cout << "Failed to create framebuffer!" << std::endl;
+        return -1;}
 
-    // depth buffer for the low-res framebuffer
-    GLuint depth_buffer;
-    glGenRenderbuffers(1, &depth_buffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, renderWidth, renderHeight);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        //print error, incomplete framebuffer
-        std::cout << "Error: Incomplete framebuffer!" << std::endl;
-        return -1;
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // setup edge detection shader 
+    Shader combine_shader("shaders/combine.vert", "shaders/combine.frag");
+    GLuint combine_fb, combine_tex, combine_db;
+    if (create_framebuffer(&combine_fb, &combine_tex, &combine_db) != 0) {
+        std::cout << "Failed to create framebuffer!" << std::endl;
+        return -1;}
 
 
-    // setup upscaling shader and quad for rendering the low-res texture to the screen
+    // post-processing shaders
+    // setup dither shader 
+    // Shader dither_shader("shaders/dither.vert", "shaders/dither.frag");
+    // setup combining/upscaling shader 
     Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
-    GLuint quadVAO, quadVBO;
-    glGenVertexArrays(1, &quadVAO);
-    glGenBuffers(1, &quadVBO);
-    glBindVertexArray(quadVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    glBindVertexArray(0);
-    // setup_material_shaders();
 
+    // we create the VAO and VBO for the full-screen quad
+    GLuint quadVAO, quadVBO;
+    create_quad_vao(&quadVAO, &quadVBO);
     // loading scene
     Scene test_scene = load_test_scene();
     selected_scene = &test_scene;
@@ -139,41 +134,78 @@ int main(){
     std::cout << "Test scene loaded. Entering Render Loop..." << std::endl;
     while(!glfwWindowShouldClose(window)){
         n_frame++;
-        // std::cout << "Frame n: " << n_frame << std::endl;
         update_deltatime();
         // update window title to display fps and frametime
         // update title every 60 frames
-        if (n_frame >= 30) {
+        if (n_frame >= 60) {
             n_frame = 0;
             snprintf(title, sizeof(title), "FPS: %.0f, Frame Time: %.2f ms", fps, delta_time * 1000.0f);
             glfwSetWindowTitle(window, title);
         }
-        // Check is an I/O event is happening
         glfwPollEvents();
-
-        // we apply FPS camera movements
         apply_camera_movements();
 
-        // we render the scene
-        // render to low-res framebuffer
-        glBindFramebuffer(GL_FRAMEBUFFER, low_res_framebuffer);
-        glViewport(0, 0, renderWidth, renderHeight);
-        // glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // test clear color to red to see if the framebuffer is working correctly
-        // glViewport(0, 0, screenWidth, screenHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        test_scene.full_render();
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // rotate light direction for testing
+        float rotateY = glm::radians(20.0f) * delta_time * 60.0f; // rotate 20 degrees per second
+        light_dir = glm::rotate(glm::mat4(1.0f), glm::radians(rotateY), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(light_dir, 1.0f);
+        lighting_uniforms["lightDir"] = light_dir;
+        // rotateY += 0.01f;
 
-        // render full screen quad with upscaled texture
+        /*
+        Render pipeline:
+        1. render the scene at a low resolution with accentuated edges
+        2. apply edge detection 
+        3. upscale to screen resolution with nearest neighbor to keep the pixelated look
+        */
+
+        // we render the scene
+        // edge-accentuating render pass
+        glBindFramebuffer(GL_FRAMEBUFFER, edge_fb);
+        glViewport(0, 0, renderWidth, renderHeight);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        test_scene.full_render(&edge_shader, edge_uniforms,true);
+        // lighting render pass
+        glBindFramebuffer(GL_FRAMEBUFFER, lighting_fb);
+        glViewport(0, 0, renderWidth, renderHeight);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        test_scene.full_render(&lighting_shader, lighting_uniforms);
+
+        // edge detection pass
+        glBindFramebuffer(GL_FRAMEBUFFER, edge_detect_fb);
+        glViewport(0, 0, renderWidth, renderHeight);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        edge_detect_shader.Use();
+        edge_detect_shader.set_uniform1i("lowResTexture", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, edge_tex);
+        glBindVertexArray(quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        
+        // combination pass (lighting + edge detection's outline)
+        glBindFramebuffer(GL_FRAMEBUFFER, combine_fb);
+        glViewport(0, 0, renderWidth, renderHeight);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        combine_shader.Use();
+        combine_shader.set_uniform1i("lightingTexture", 0);
+        combine_shader.set_uniform1i("edgeTexture", 1);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, lighting_tex);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, edge_detect_tex);
+        glBindVertexArray(quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        
+        // we upscale and apply other prost processing
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, screenWidth, screenHeight);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         upscale_shader.Use();
-        glBindTexture(GL_TEXTURE_2D, low_res_texture);
-        glBindVertexArray(quadVAO);
+        upscale_shader.set_uniform1i("lowResTexture", 0);
         glActiveTexture(GL_TEXTURE0);
-        upscale_shader.set_uniform1f("lowResTexture", 0);
+        glBindTexture(GL_TEXTURE_2D, combine_tex);
+        // glBindTexture(GL_TEXTURE_2D, low_res_texture);
+        glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
-        // glBindVertexArray(0);
 
         // Swapping back and front buffers
         glfwSwapBuffers(window);
@@ -186,6 +218,53 @@ int main(){
     return 0;
 }
 
+int create_quad_vao(GLuint* vao, GLuint* vbo) {
+    glGenVertexArrays(1, vao);
+    glGenBuffers(1, vbo);
+    glBindVertexArray(*vao);
+    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glBindVertexArray(0);
+    return 0;
+}
+
+int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer) {
+    // generate texture for color attachment (low resolution)
+    glGenTextures(1, texture);
+    glBindTexture(GL_TEXTURE_2D, *texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderWidth, renderHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+    // set filtering to NEAREST to avoid blurring the image when we will render it on the screen
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // wrap clamp
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    //create low-resolution framebuffer for offscreen rendering
+    glGenFramebuffers(1, framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, *framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *texture, 0);
+
+    // depth buffer for the low-res framebuffer
+    glGenRenderbuffers(1, depth_buffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, *depth_buffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, renderWidth, renderHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, *depth_buffer);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        //print error, incomplete framebuffer
+        std::cout << "Error: Incomplete framebuffer!" << std::endl;
+        return -1;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return 0;
+}
 void update_deltatime() {
     current_time = glfwGetTime();
     delta_time = current_time - last_time;
@@ -212,7 +291,7 @@ GLFWwindow* setup_openGL(int* width, int* height){
         return window;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(0);
+    // glfwSwapInterval(0);
     // we put in relation the window and the callbacks
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -229,7 +308,7 @@ GLFWwindow* setup_openGL(int* width, int* height){
     // we enable Z test
     glEnable(GL_DEPTH_TEST);
     //the "clear" color for the frame buffer
-    glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     return window;
 }
 

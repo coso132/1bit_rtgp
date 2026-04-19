@@ -18,7 +18,7 @@ IDIR = include
 LDIR = libs/linux
 
 # compiler flags:
-CXXFLAGS  = -g -O0 -x c++ -Wall -Wno-invalid-offsetof -std=c++11 -I$(IDIR)
+CXXFLAGS  = -g -O0 -x c++ -Wall -Wno-invalid-offsetof -std=c++17 -I$(IDIR)
 
 # linker flags:
 LDFLAGS = -L$(LDIR) -lglfw3 -lassimp -lz -lminizip -lkubazip -lpoly2tri -lpolyclipping -ldraco -lpugixml
