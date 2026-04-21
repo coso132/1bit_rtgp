@@ -1,25 +1,3 @@
-/*
-Model class
-- OBJ models loading using Assimp library
-- the class converts data from Assimp data structure to a OpenGL-compatible data structure (Mesh class in mesh.h)
-
-N.B. 1)
-Model and Mesh classes follow RAII principles (https://en.cppreference.com/w/cpp/language/raii).
-Model is a "move-only" class. A move-only class ensures that you always have a 1:1 relationship between the total number of resources being created and the total number of actual instantiations occurring.
-
-N.B. 2) no texturing in this version of the class
-
-N.B. 3) based on https://github.com/JoeyDeVries/LearnOpenGL/blob/master/includes/learnopengl/model.h
-
-authors: Davide Gadia, Michael Marchesan
-
-Real-Time Graphics Programming - a.a. 2025/2026
-Master degree in Computer Science
-Universita' degli Studi di Milano
-*/
-
-
-
 #pragma once
 using namespace std;
 

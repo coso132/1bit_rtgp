@@ -1,51 +1,29 @@
-using namespace std;
-// personally developed classes
-#include <utils/shader.h>
-#include <utils/model.h>
-#include <utils/camera.h>
-#include <utils/scene.h>
+#include "main.h"
+#include "misc.h"
 
-#include <string>
-#ifdef _WIN32
-    #define APIENTRY __stdcall
-#endif
-#include <glad/glad.h>
-#include <glfw/glfw3.h>
-#ifdef _WINDOWS_
-    #error windows.h was included!
-#endif
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/matrix_inverse.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image/stb_image.h>
+//////// RENDER PARAMETERS ///////////
+enum debugMode {
+    NONE,
+    EDGE_ACCENTUATION,
+    ONLY_EDGE,
+    ONLY_LIGHTING,
+    SHADOWMAP,
+};
+debugMode debug = NONE;
+bool vsync = true;
 
-// dimensions of application's window
-GLuint screenWidth = 1920, screenHeight = 1080;
-// lower resolution for rendering for aesthetic reason
+int screenWidth = 1920, screenHeight = 1080;
 GLuint factor = 50;
 GLuint renderWidth = 16*factor, renderHeight = 9*factor;
-// GLuint renderWidth = 2560, renderHeight = 1440;
+// GLuint renderWidth = screenWidth, renderHeight = screenHeight;
 // GLuint renderWidth = 640, renderHeight = 360;
+//////////////////////////////////////
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void apply_camera_movements();
+GLfloat fps, current_time, last_time,delta_time = 1.0f;
+
 bool keys[1024];
 GLfloat lastX, lastY;
 bool firstMouse = true;
-
-//NEW FUNCTIONS (unseen in lectures)
-GLFWwindow* setup_openGL(int* width, int* height);
-Scene load_test_scene();
-int create_quad_vao(GLuint* vao, GLuint* vbo);
-int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer);
-//fps calculations
-GLfloat fps, current_time, last_time,delta_time = 1.0f;
-void update_deltatime();
-// scene being rendered
-Scene* selected_scene;
 
 // fullscren quad for post processing 
 float quadVertices[] = {
@@ -58,50 +36,37 @@ float quadVertices[] = {
      1.0f, -1.0f,    1.0f, 0.0f,
      1.0f,  1.0f,    1.0f, 1.0f
 };
-
-/////////////////// MAIN function ///////////////////////
+GLuint quadVAO, quadVBO;
+Scene* selected_scene;
 int main(){
     std::cout << "Entering main..." << std::endl;
     update_deltatime();
 
-    int width, height;
     std::cout << "Setting up OpenGL..." << std::endl;
-    GLFWwindow* window = setup_openGL(&width, &height);
+    GLFWwindow* window = setup_openGL(&screenWidth, &screenHeight, key_callback, mouse_callback, true);
     if (!window) return -1;
 
+    // SETUP OF THE FRAMEBUFFERS FOR THE RENDERING PIPELINE
     // lighting fb
-    std::map<std::string, UniformValue> lighting_uniforms;
     GLuint lighting_fb, lighting_tex, lighting_db;
-    if (create_framebuffer(&lighting_fb, &lighting_tex, &lighting_db) != 0) {
-        std::cout << "Failed to create framebuffer!" << std::endl;
-        return -1;}
+    create_framebuffer(&lighting_fb, &lighting_tex, &lighting_db);
     // edge accentuation fb
     GLuint edge_fb, edge_tex, edge_db;
-    if (create_framebuffer(&edge_fb, &edge_tex, &edge_db) != 0) {
-        std::cout << "Failed to create framebuffer!" << std::endl;
-        return -1;}
-
-    // setup edge detection shader 
+    create_framebuffer(&edge_fb, &edge_tex, &edge_db);
+    // setup edge detection with shader 
     Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect.frag");
     GLuint edge_detect_fb, edge_detect_tex, edge_detect_db;
-    if (create_framebuffer(&edge_detect_fb, &edge_detect_tex, &edge_detect_db) != 0) {
-        std::cout << "Failed to create framebuffer!" << std::endl;
-        return -1;}
-
-    // setup edge detection shader 
+    create_framebuffer(&edge_detect_fb, &edge_detect_tex, &edge_detect_db);
+    // setup combination fb and shader 
     Shader combine_shader("shaders/combine.vert", "shaders/combine.frag");
     GLuint combine_fb, combine_tex, combine_db;
-    if (create_framebuffer(&combine_fb, &combine_tex, &combine_db) != 0) {
-        std::cout << "Failed to create framebuffer!" << std::endl;
-        return -1;}
-
-    // post-processing shaders
+    create_framebuffer(&combine_fb, &combine_tex, &combine_db);
+    // upscale shader
     Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
-
-    // we create the VAO and VBO for the full-screen quad
-    GLuint quadVAO, quadVBO;
+    // create the VAO and VBO for the full-screen quad
     create_quad_vao(&quadVAO, &quadVBO);
-    // loading scene
+
+    // SCENE LOADING
     Scene test_scene = load_test_scene();
     selected_scene = &test_scene;
 
@@ -138,44 +103,26 @@ int main(){
         // 1. edge-accentuating render pass
         test_scene.full_render({}, Scene::EDGE_ACCENTUATION, edge_fb, renderWidth,renderHeight);
 
-        // from now on this is all post processing
         // 3. edge detection pass
-        glBindFramebuffer(GL_FRAMEBUFFER, edge_detect_fb);
-        glViewport(0, 0, renderWidth, renderHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        edge_detect_shader.Use();
-        edge_detect_shader.set_uniform1i("lowResTexture", 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, edge_tex);
-        glBindVertexArray(quadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        post_process(edge_detect_fb, {edge_tex}, {"lowResTexture"}, edge_detect_shader, renderWidth, renderHeight);
         
         // 4. combination pass (lighting + edge detection's outline)
-        glBindFramebuffer(GL_FRAMEBUFFER, combine_fb);
-        glViewport(0, 0, renderWidth, renderHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        combine_shader.Use();
-        combine_shader.set_uniform1i("lightingTexture", 0);
-        combine_shader.set_uniform1i("edgeTexture", 1);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, lighting_tex);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, edge_detect_tex);
-        glBindVertexArray(quadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        post_process(combine_fb, {lighting_tex, edge_detect_tex}, {"lightingTexture", "edgeTexture"}, combine_shader, renderWidth, renderHeight);
         
         // 5. we upscale 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, screenWidth, screenHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        upscale_shader.Use();
-        upscale_shader.set_uniform1i("lowResTexture", 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, combine_tex);
-        // glBindTexture(GL_TEXTURE_2D, selected_scene->light.shadow_map_depth_map);
-        // glBindTexture(GL_TEXTURE_2D, low_res_texture);
-        glBindVertexArray(quadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        GLuint* final_texture;
+        if (debug == NONE) 
+            final_texture = &combine_tex;
+        else if (debug == ONLY_EDGE) 
+            final_texture = &edge_detect_tex;
+        else if (debug == EDGE_ACCENTUATION) 
+            final_texture = &edge_tex;
+        else if (debug == ONLY_LIGHTING) 
+            final_texture = &lighting_tex;
+        else if (debug == SHADOWMAP)
+            final_texture = &test_scene.light.shadow_map_depth_map;
+        
+        post_process(0, {*final_texture}, {"lowResTexture"}, upscale_shader, screenWidth, screenHeight);
 
         // Swapping back and front buffers
         glfwSwapBuffers(window);
@@ -186,6 +133,23 @@ int main(){
     //scene.delete(); //TODO implement this method to free the memory of the objects in the scene, and the shaders, etc...
 
     return 0;
+}
+
+void post_process(GLuint buffer, vector<GLuint> textures, vector<string> texture_names, Shader shader, int width, int height){
+    glBindFramebuffer(GL_FRAMEBUFFER, buffer);
+    glViewport(0, 0, width, height);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    shader.Use();
+    shader.set_uniform1i("lowResTexture", 0);
+    for (size_t i = 0; i < textures.size(); i++)
+    {
+        shader.set_uniform1i(texture_names[i], i);
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, textures[i]);
+    }
+    
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 int create_quad_vao(GLuint* vao, GLuint* vbo) {
@@ -242,80 +206,6 @@ void update_deltatime() {
     last_time = current_time;
 }
 
-GLFWwindow* setup_openGL(int* width, int* height){
-    // Initialization of OpenGL context using GLFW
-    glfwInit();
-    // We set OpenGL specifications required for this application
-    // In this case: 4.1 Core
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    // we set if the window is resizable
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-    // we create the application's window
-    GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, "easter egg!", nullptr, nullptr);
-    if (!window){
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return window;
-    }
-    glfwMakeContextCurrent(window);
-    // glfwSwapInterval(0);
-    // we put in relation the window and the callbacks
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    // we disable the mouse cursor
-    // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    // GLAD tries to load the context set by GLFW
-    if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress)){
-        std::cout << "Failed to initialize OpenGL context" << std::endl;
-        return window;
-    }
-    // we define the viewport dimensions
-    // int width, height;
-    glfwGetFramebufferSize(window, width, height);
-    // we enable Z test
-    glEnable(GL_DEPTH_TEST);
-    //the "clear" color for the frame buffer
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    return window;
-}
-
-// we load the image from disk and we create an OpenGL texture
-// TODO move to scene.h
-GLint LoadTexture(const char* path){
-    GLuint textureImage;
-    int w, h, channels;
-    unsigned char* image;
-    image = stbi_load(path, &w, &h, &channels, STBI_rgb);
-
-    if (image == nullptr)
-        std::cout << "Failed to load texture!" << std::endl;
-
-    glGenTextures(1, &textureImage);
-    glBindTexture(GL_TEXTURE_2D, textureImage);
-    // 3 channels = RGB ; 4 channel = RGBA
-    if (channels==3)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-    else if (channels==4)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    // we set how to consider UVs outside [0,1] range
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // we set the filtering for minification and magnification
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-
-    // we free the memory once we have created an OpenGL texture
-    stbi_image_free(image);
-
-    // we set the binding to 0 once we have finished
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    return textureImage;
-}
 
 // If one of the WASD keys is pressed, the camera is moved accordingly (the code is in utils/camera.h)
 void apply_camera_movements()
@@ -350,6 +240,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
+    else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_1 + SHADOWMAP && action == GLFW_PRESS){
+        debug = static_cast<debugMode>(key - GLFW_KEY_1);
+    }
     if(action == GLFW_PRESS)
         keys[key] = true;
     else if(action == GLFW_RELEASE)
