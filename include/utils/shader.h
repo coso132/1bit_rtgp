@@ -107,6 +107,7 @@ public:
     // We delete the Shader Program when application closes
     void Delete() { glDeleteProgram(this->Program); }
     
+    // added these
     void set_uniform1b(const string &name, bool value) const{
         glUniform1i(glGetUniformLocation(this->Program, name.c_str()), (int)value);}
     void set_uniform1i(const string &name, int value) const{
@@ -121,6 +122,25 @@ public:
         glUniformMatrix3fv(glGetUniformLocation(this->Program, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));}
     void set_uniformMatrix4fv(const string &name, const glm::mat4& value) const{
         glUniformMatrix4fv(glGetUniformLocation(this->Program, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));}
+
+    //awful generic eclectic uniform setting function
+    // void set_uniform(const string &name, const UniformValue& value) const{
+    //     if (holds_alternative<bool>(value)){
+    //         set_uniform1b(name, get<bool>(value));
+    //     } else if (holds_alternative<int>(value)){
+    //         set_uniform1i(name, get<int>(value));
+    //     } else if (holds_alternative<float>(value)){
+    //         set_uniform1f(name, get<float>(value));
+    //     } else if (holds_alternative<glm::vec2>(value)){
+    //         set_uniform2fv(name, get<glm::vec2>(value));
+    //     } else if (holds_alternative<glm::vec3>(value)){
+    //         set_uniform3fv(name, get<glm::vec3>(value));
+    //     } else if (holds_alternative<glm::mat3>(value)){
+    //         set_uniformMatrix3fv(name, get<glm::mat3>(value));
+    //     } else if (holds_alternative<glm::mat4>(value)){
+    //         set_uniformMatrix4fv(name, get<glm::mat4>(value));
+    //     }
+    // }
 
 private:
     //////////////////////////////////////////

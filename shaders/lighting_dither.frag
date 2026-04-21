@@ -1,23 +1,15 @@
 #version 410 core
 
-// output shader variable
 out vec4 colorFrag;
 
-// the transformed normal has been calculated per-vertex in the vertex shader
 in vec3 N;
-
-// the transformed light direction has been calculated per-vertex in the vertex shader
 in vec3 L;
-
 in vec4 FragPosLightSpace;
-
 uniform sampler2D shadowMap;
 
 // Shadow calculation using simple PCF (3x3)
 float calculateShadow(vec4 fragPosLightSpace) {
-    // Perspective division to NDC [-1,1]
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    // Transform to [0,1] range for texture lookup
     projCoords = projCoords * 0.5 + 0.5;
     
     // If outside the light frustum, no shadow
@@ -27,7 +19,6 @@ float calculateShadow(vec4 fragPosLightSpace) {
         return 1.0; // fully lit
     
     float currentDepth = projCoords.z;
-    // Bias to reduce shadow acne (tune based on your scene)
     float bias = max(0.05 * (1.0 - dot(normalize(N), normalize(L))), 0.005);
     
     float shadow = 0.0;
@@ -40,14 +31,11 @@ float calculateShadow(vec4 fragPosLightSpace) {
         }
     }
     shadow /= 9.0;
-    // if (projCoords.z > 1.0) shadow = 0.0; 
     
-    return   1- shadow; // 1.0 = fully lit, 0.0 = fully shadowed
+    return 1.0 - shadow;
 }
 
 void main(){
-	// we use the normal as a color
-	// final color (0,1) black and white
 	vec3 n = normalize(N);
 	vec3 l = normalize(L);
 	float ambient = 0.1;
@@ -55,12 +43,19 @@ void main(){
     float rawDiffuse = max(dot(n,l),0.0);
     float shadowFactor=calculateShadow(FragPosLightSpace);
     float diffuse = ambient + (rawDiffuse*0.9) * shadowFactor;
+    diffuse = smoothstep(0.0,0.5,diffuse);
+    // force full black or white if diffuse value is 0 or 1
+    if (diffuse <=0.0) {
+        colorFrag = vec4(0.0,0.0,0.0,1.0);
+        return;
+    }
+    if (diffuse >=1.0) {
+        colorFrag = vec4(1.0,1.0,1.0,1.0);
+        return;
+    }
+	// quantize diffuse in few different possible light levels
+	diffuse = floor(diffuse * 3.0) / 3.0;
 
-	// quantize diffuse in 4 different possible light levels
-	// diffuse = floor(diffuse * 4.0) / 4.0;
-
-	
-	// colorFrag = vec4(vec3(diffuse), 1.0);
     // 4x4 Bayer pattern (normalised to [0,1])
     const float bayer[16] = float[](
         0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
@@ -77,13 +72,7 @@ void main(){
 
     // compare diffuse intensity with threshold
     float finalIntensity = (diffuse > threshold) ? 1.0 : 0.0;
-
     colorFrag = vec4(vec3(finalIntensity), 1.0);
-    if (diffuse <=0.1) {
-        colorFrag = vec4(0.0,0.0,0.0,1.0);
-    }
-    if (diffuse >=0.6) {
-        colorFrag = vec4(1.0,1.0,1.0,1.0);
-    }
+    // debugging purposes
     // colorFrag = vec4(vec3(diffuse), 1.0);
 }

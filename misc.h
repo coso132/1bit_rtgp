@@ -1,11 +1,4 @@
 #pragma once
-// personally developed classes
-// #include <utils/shader.h>
-// #include <utils/model.h>
-// #include <utils/camera.h>
-// #include <utils/scene.h>
-// #include "main.h"
-
 #include <string>
 #include <iostream>
 #ifdef _WIN32
@@ -16,15 +9,15 @@
 #ifdef _WINDOWS_
     #error windows.h was included!
 #endif
-// #include <glm/glm.hpp>
-// #include <glm/gtc/matrix_transform.hpp>
-// #include <glm/gtc/matrix_inverse.hpp>
-// #include <glm/gtc/type_ptr.hpp>
 // #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
 
 
 GLFWwindow* setup_openGL(int* width, int* height, GLFWkeyfun key_callback, GLFWcursorposfun mouse_callback, bool vsync);
 
-// TODO move to scene.h
+// TODO move 
 GLint LoadTexture(const char* path);
+
+int create_quad_vao(GLuint* vao, GLuint* vbo, float*, unsigned long size) ;
+int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer, int width, int height);
+int create_pipeline_buffers(int width, int height, GLuint* lighting_fb, GLuint* lighting_tex, GLuint* lighting_db, GLuint* edge_fb, GLuint* edge_tex, GLuint* edge_db,  GLuint* edge_detect_fb, GLuint* edge_detect_tex, GLuint* edge_detect_db, GLuint* combine_fb, GLuint* combine_tex, GLuint* combine_db);

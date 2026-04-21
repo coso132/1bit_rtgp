@@ -19,9 +19,6 @@ public:
     // world coordinates
     glm::vec3 pos;
     glm::mat4 model_matrix;
-    // modea of the object
-    // shader program to render this object with
-    // Shader shader;//not needed?
     Material material;
     Model model;
 
@@ -48,5 +45,7 @@ public:
         this->pos = new_pos;
         this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
     }
+
+    // should add rotation and other stuff
 };
 

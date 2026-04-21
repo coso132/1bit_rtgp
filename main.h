@@ -23,8 +23,5 @@
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void apply_camera_movements();
-Scene load_test_scene();
-int create_quad_vao(GLuint* vao, GLuint* vbo);
-int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer);
 void update_deltatime();
 void post_process(GLuint buffer, vector<GLuint> textures, vector<string> texture_names, Shader shader, int width, int height);

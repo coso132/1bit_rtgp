@@ -13,7 +13,7 @@ uniform mat3 normalMatrix;
 
 uniform float object_id_in;
 uniform vec3 object_pos_in;
-uniform float fill_in;
+uniform float fill_in; // if the object has a complex model, set a solid color for each fragment of this model
 
 flat out vec3 N;
 out vec3 pos;
@@ -22,11 +22,8 @@ out float fill;
 
 void main()
 {
-    // transformations are applied to each vertex
     gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
-    // the normal is transformed using the normal matrix and passed to the fragment shader
     N = normalize(normalMatrix * normal);
-    // pass the view space position of the whole object to the fragment shader
     pos = (viewMatrix * modelMatrix * vec4(object_pos_in, 1.0)).xyz;
     object_id = object_id_in;
     fill = fill_in;

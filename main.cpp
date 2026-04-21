@@ -37,7 +37,9 @@ float quadVertices[] = {
      1.0f,  1.0f,    1.0f, 1.0f
 };
 GLuint quadVAO, quadVBO;
+
 Scene* selected_scene;
+
 int main(){
     std::cout << "Entering main..." << std::endl;
     update_deltatime();
@@ -48,23 +50,16 @@ int main(){
 
     // SETUP OF THE FRAMEBUFFERS FOR THE RENDERING PIPELINE
     // lighting fb
-    GLuint lighting_fb, lighting_tex, lighting_db;
-    create_framebuffer(&lighting_fb, &lighting_tex, &lighting_db);
-    // edge accentuation fb
-    GLuint edge_fb, edge_tex, edge_db;
-    create_framebuffer(&edge_fb, &edge_tex, &edge_db);
-    // setup edge detection with shader 
+    GLuint lighting_fb, lighting_tex, lighting_db, combine_fb, combine_tex, combine_db, edge_fb, edge_tex, edge_db,edge_detect_fb, edge_detect_tex, edge_detect_db;
+    create_pipeline_buffers(renderWidth, renderHeight, &lighting_fb, &lighting_tex, &lighting_db, &edge_fb, &edge_tex, &edge_db, &edge_detect_fb, &edge_detect_tex, &edge_detect_db, &combine_fb, &combine_tex, &combine_db);
+    
+    // POST PROCESSING AND OTHER SHADERS
     Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect.frag");
-    GLuint edge_detect_fb, edge_detect_tex, edge_detect_db;
-    create_framebuffer(&edge_detect_fb, &edge_detect_tex, &edge_detect_db);
-    // setup combination fb and shader 
     Shader combine_shader("shaders/combine.vert", "shaders/combine.frag");
-    GLuint combine_fb, combine_tex, combine_db;
-    create_framebuffer(&combine_fb, &combine_tex, &combine_db);
-    // upscale shader
     Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
+
     // create the VAO and VBO for the full-screen quad
-    create_quad_vao(&quadVAO, &quadVBO);
+    create_quad_vao(&quadVAO, &quadVBO, quadVertices,sizeof(float)*24);
 
     // SCENE LOADING
     Scene test_scene = load_test_scene();
@@ -72,11 +67,12 @@ int main(){
 
     char title[256];
     int n_frame = 0;
+    
+    // RENDER LOOP
     std::cout << "Test scene loaded. Entering Render Loop..." << std::endl;
     while(!glfwWindowShouldClose(window)){
         n_frame++;
         update_deltatime();
-        // update window title to display fps and frametime
         // update title every 60 frames
         if (n_frame >= 60) {
             n_frame = 0;
@@ -86,21 +82,21 @@ int main(){
         glfwPollEvents();
         apply_camera_movements();
 
-        //////////ON FRAME EVENTS///////////////////////
+        //////////ON FRAME EVENTS/////////
         selected_scene->light.rotate(30.0f * delta_time, glm::vec3(0.0,1.0f,0.0f));
         /////////////////////////////////
 
         /*  Render pipeline:
-          1. render the scene at a low resolution with accentuated edges
-          2. render the scene at a low resolution with lighting only
+          1. render the scene at a low resolution with lighting only
+          2. render the scene at a low resolution with accentuated edges
           3. apply edge detection to edge accentuated render
           4. combine the edge detection's output with the lighting render to get the final low-res render
           5. upscale to screen resolution with nearest neighbor to keep the pixelated look*/
 
-        // 2. lighting render pass
+        // 1. lighting render pass
         test_scene.full_render({}, Scene::LIGHTING, lighting_fb, renderWidth,renderHeight);
 
-        // 1. edge-accentuating render pass
+        // 2. edge-accentuating render pass
         test_scene.full_render({}, Scene::EDGE_ACCENTUATION, edge_fb, renderWidth,renderHeight);
 
         // 3. edge detection pass
@@ -109,7 +105,7 @@ int main(){
         // 4. combination pass (lighting + edge detection's outline)
         post_process(combine_fb, {lighting_tex, edge_detect_tex}, {"lightingTexture", "edgeTexture"}, combine_shader, renderWidth, renderHeight);
         
-        // 5. we upscale 
+        // debug mode 
         GLuint* final_texture;
         if (debug == NONE) 
             final_texture = &combine_tex;
@@ -122,6 +118,7 @@ int main(){
         else if (debug == SHADOWMAP)
             final_texture = &test_scene.light.shadow_map_depth_map;
         
+        // 5. we upscale 
         post_process(0, {*final_texture}, {"lowResTexture"}, upscale_shader, screenWidth, screenHeight);
 
         // Swapping back and front buffers
@@ -152,53 +149,6 @@ void post_process(GLuint buffer, vector<GLuint> textures, vector<string> texture
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-int create_quad_vao(GLuint* vao, GLuint* vbo) {
-    glGenVertexArrays(1, vao);
-    glGenBuffers(1, vbo);
-    glBindVertexArray(*vao);
-    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    glBindVertexArray(0);
-    return 0;
-}
-
-int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer) {
-    // generate texture for color attachment (low resolution)
-    glGenTextures(1, texture);
-    glBindTexture(GL_TEXTURE_2D, *texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, renderWidth, renderHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-
-    // set filtering to NEAREST to avoid blurring the image when we will render it on the screen
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    // wrap clamp
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    //create low-resolution framebuffer for offscreen rendering
-    glGenFramebuffers(1, framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, *framebuffer);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *texture, 0);
-
-    // depth buffer for the low-res framebuffer
-    glGenRenderbuffers(1, depth_buffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, *depth_buffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, renderWidth, renderHeight);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, *depth_buffer);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        //print error, incomplete framebuffer
-        std::cout << "Error: Incomplete framebuffer!" << std::endl;
-        return -1;
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return 0;
-}
 void update_deltatime() {
     current_time = glfwGetTime();
     delta_time = current_time - last_time;
@@ -207,14 +157,8 @@ void update_deltatime() {
 }
 
 
-// If one of the WASD keys is pressed, the camera is moved accordingly (the code is in utils/camera.h)
 void apply_camera_movements()
 {
-    // if a single WASD key is pressed, then we will apply the full value of velocity v in the corresponding direction.
-    // However, if two keys are pressed together in order to move diagonally (W+D, W+A, S+D, S+A), 
-    // then the camera will apply a compensation factor to the velocities applied in the single directions, 
-    // in order to have the full v applied in the diagonal direction  
-    // the XOR on A and D is to avoid the application of a wrong attenuation in the case W+A+D or S+A+D are pressed together.  
     GLboolean diagonal_movement = (keys[GLFW_KEY_W] ^ keys[GLFW_KEY_S]) && (keys[GLFW_KEY_A] ^ keys[GLFW_KEY_D]); 
     selected_scene->camera.SetMovementCompensation(diagonal_movement);
     

@@ -11,6 +11,7 @@ models/**/*.obj
 **/*.zip
 **/*.mtl
 **/*.jpg
+**/*.png
 
 
 ## DEFAULT GITHUB C++ GITIGNORE

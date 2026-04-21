@@ -13,20 +13,14 @@ Universita' degli Studi di Milano
 
 #version 410 core
 
-// vertex position in world coordinates
 layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 normal;// we don't need the normal for the shadow map, but we need to define it to match the vertex attributes of the Mesh class
-// the numbers used for the location in the layout qualifier are the positions of the vertex attribute
-// as defined in the Mesh class
+layout (location = 1) in vec3 normal;
 
-// projection and view matrix -> vertex coordinates will be expressed using the light position as origin
 uniform mat4 lightSpaceMatrix;
 
-// model matrix
 uniform mat4 modelMatrix;
 
 void main()
 {
-	  // we apply the transformation to express the vertex from the point of view of the light
     gl_Position = lightSpaceMatrix * modelMatrix * vec4(position, 1.0f);
 }

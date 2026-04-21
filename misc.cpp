@@ -1,6 +1,4 @@
-// personally developed classes
 #include "misc.h"
-// using namespace std;
 
 GLFWwindow* setup_openGL(int* width, int* height, GLFWkeyfun key_callback, GLFWcursorposfun mouse_callback, bool vsync){
     // Initialization of OpenGL context using GLFW
@@ -45,7 +43,7 @@ GLFWwindow* setup_openGL(int* width, int* height, GLFWkeyfun key_callback, GLFWc
     return window;
 }
 
-// TODO move to scene.h
+// TODO implement properly and move to sceneobject.h
 GLint LoadTexture(const char* path){
     GLuint textureImage;
     int w, h, channels;
@@ -77,4 +75,63 @@ GLint LoadTexture(const char* path){
     glBindTexture(GL_TEXTURE_2D, 0);
 
     return textureImage;
+}
+
+int create_quad_vao(GLuint* vao, GLuint* vbo, float * quadVertices, unsigned long size) {
+    glGenVertexArrays(1, vao);
+    glGenBuffers(1, vbo);
+    glBindVertexArray(*vao);
+    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+    glBufferData(GL_ARRAY_BUFFER, size, quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glBindVertexArray(0);
+    return 0;
+}
+
+int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer, int width, int height) {
+    // generate texture for color attachment (low resolution)
+    glGenTextures(1, texture);
+    glBindTexture(GL_TEXTURE_2D, *texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+    // set filtering to NEAREST to avoid blurring the image when we will render it on the screen
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // wrap clamp
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    //create low-resolution framebuffer for offscreen rendering
+    glGenFramebuffers(1, framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, *framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *texture, 0);
+
+    // depth buffer for the low-res framebuffer
+    glGenRenderbuffers(1, depth_buffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, *depth_buffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, *depth_buffer);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        //print error, incomplete framebuffer
+        std::cout << "Error: Incomplete framebuffer!" << std::endl;
+        return -1;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return 0;
+}
+
+int create_pipeline_buffers(int width, int height, GLuint* lighting_fb, GLuint* lighting_tex, GLuint* lighting_db, GLuint* edge_fb, GLuint* edge_tex, GLuint* edge_db,  GLuint* edge_detect_fb, GLuint* edge_detect_tex, GLuint* edge_detect_db, GLuint* combine_fb, GLuint* combine_tex, GLuint* combine_db){
+    create_framebuffer(lighting_fb, lighting_tex, lighting_db, width, height);
+    // edge accentuation fb
+    create_framebuffer(edge_fb, edge_tex, edge_db, width, height);
+    // setup edge detection with shader 
+    create_framebuffer(edge_detect_fb, edge_detect_tex, edge_detect_db, width, height);
+    // setup combination fb and shader 
+    create_framebuffer(combine_fb, combine_tex, combine_db, width, height);
+    return 1;
 }

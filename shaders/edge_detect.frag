@@ -1,10 +1,10 @@
 // this shader will be used to detect edges in the low-res render, and output a texture where the edges are white and the rest is black. 
 // this uses a simple edge detaction algorithm based on the difference in color between neighboring pixels.
-#version 330 core
+#version 410 core
 in vec2 TexCoord;
 out vec4 FragColor;
 uniform sampler2D lowResTexture;
-// edge detection kernel (Sobel operator)
+// edge detection kernel 
 const float kernel[9] = float[](
     -1, -1, -1,
     -1,  8, -1,
@@ -20,13 +20,10 @@ void main() {
             result += texture(lowResTexture, TexCoord + offset).rgb * kernel[(i+1)*3 + (j+1)];
         }
     }
-    // output the edge color (white for edges, black for non-edges)
-    // float bw = step(0.9, length(result)); // simple thresholding to create a binary edge map
-    // FragColor = vec4(vec3(bw), 1.0);
-    // alternatively, to create a binary edge map, threshold the result:
     float edge_strength = length(result);
     float edge_threshold = 0.6; // adjust this threshold as needed
     FragColor = vec4(vec3(edge_strength > edge_threshold ? 1.0 : 0.0), 1.0);
+    // debugging purposes
     // FragColor = vec4(vec3(result),1.0);
     // FragColor = texture(lowResTexture, TexCoord);
 }
