@@ -107,6 +107,8 @@ public:
     // We delete the Shader Program when application closes
     void Delete() { glDeleteProgram(this->Program); }
     
+    void set_uniform1b(const string &name, bool value) const{
+        glUniform1i(glGetUniformLocation(this->Program, name.c_str()), (int)value);}
     void set_uniform1i(const string &name, int value) const{
         glUniform1i(glGetUniformLocation(this->Program, name.c_str()), value);}
     void set_uniform1f(const string &name, float value) const{

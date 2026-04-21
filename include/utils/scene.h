@@ -14,19 +14,108 @@
 
 enum Material {
     SIMPLE,
-    WOOD,
     COMPLEX,
     SOMETHING_ELSE,
 };
+// enum LightType {
+//     DIRECTIONAL,
+//     POINT,
+//     SPOT,
+// };
 
+using UniformValue = std::variant<float, glm::vec2, glm::vec3, glm::mat3, glm::mat4>;
 
+class Light {
+public:
+    virtual ~Light() = default;
+    virtual void set_shader_uniforms(Shader* shader) const = 0;
+    virtual glm::mat4 get_light_space_matrix() const = 0;
+    // glm::vec3 color{1.0f, 1.0f, 1.0f};
+    float intensity{1.0f};
+    bool casts_shadows{true};
+    GLuint shadow_map_fb;
+    GLuint shadow_map_depth_map;
+    GLuint shadow_map_tex;
+    Shader shadow_map_shader;
+    // std::map<std::string, UniformValue> uniforms;
+    int shadow_map_resolution{2048};
+    glm::mat4 light_space_matrix{1.0f};
+    
+    Light(Shader shadow_map_shader): shadow_map_shader(shadow_map_shader){
+        create_buffers();
+    }
+    void create_buffers() {
+        /////////////////// CREATION OF BUFFER FOR THE  DEPTH MAP /////////////////////////////////////////
+        // buffer dimension: too large -> performance may slow down if we have many lights; too small -> strong aliasing
+        // we create a Frame Buffer Object: the first rendering step will render to this buffer, and not to the real frame buffer
+        glGenFramebuffers(1, &shadow_map_fb);
+        // we create a texture for the depth map
+        glGenTextures(1, &shadow_map_depth_map);
+        glBindTexture(GL_TEXTURE_2D, shadow_map_depth_map);
+        // in the texture, we will save only the depth data of the fragments. Thus, we specify that we need to render only depth in the first rendering step
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadow_map_resolution, shadow_map_resolution, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        // we set to clamp the uv coordinates outside [0,1] to the color of the border
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+        // outside the area covered by the light frustum, everything is rendered in shadow (because we set GL_CLAMP_TO_BORDER)
+        // thus, we set the texture border to white, so to render correctly everything not involved by the shadow map
+        //*************
+        GLfloat borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+        // we bind the depth map FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_map_depth_map, 0);
+        // we set that we are not calculating nor saving color data
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+        // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+};
+
+class DirectionalLight : public Light {
+public:
+    glm::vec3 direction;
+    float range{30.0f}; // for shadow mapping purposes, we can define a range for the directional light to limit the orthographic projection
+    DirectionalLight(const glm::vec3& direction, float range, Shader shadow_map_shader) : Light(shadow_map_shader), direction(direction), range(range) {
+        set_direction(direction);
+    }
+    void set_shader_uniforms(Shader* shader) const override {
+        shader->set_uniform3fv("directionalLightDirection", direction);
+        shader->set_uniform1f("directionalLightIntensity", intensity);
+        glActiveTexture(GL_TEXTURE0);
+        // maybe should be a ttexture o rs oemting
+        glBindTexture(GL_TEXTURE_2D, shadow_map_depth_map);
+        shader->set_uniform1i("shadowMap", 0);
+        shader->set_uniformMatrix4fv("lightSpaceMatrix", light_space_matrix);
+    }
+    glm::mat4 get_light_space_matrix() const override {
+        return light_space_matrix;
+    }
+    void set_direction(const glm::vec3& new_direction) {
+        direction = glm::normalize(new_direction);
+        //change light space matrix accordingly using direction and range
+        glm::mat4 light_projection = glm::ortho(-range, range, -range, range, 0.01f, range*2.0f);
+        glm::mat4 light_view = glm::lookAt(-direction * range, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        light_space_matrix = light_projection * light_view;
+        
+    }
+    void rotate(float angle_degrees, const glm::vec3& axis) {
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(angle_degrees), axis);
+        set_direction(glm::normalize(glm::vec3(rotation * glm::vec4(direction, 0.0f))));
+    }
+
+};
 // data structure for scene objects
 class Object {
 public:
     // world coordinates
     glm::vec3 pos;
     glm::mat4 model_matrix;
-    // model of the object
+    // modea of the object
     // shader program to render this object with
     // Shader shader;//not needed?
     Material material;
@@ -61,11 +150,6 @@ public:
 /////////////////// SCENE class ///////////////////////
 class Scene {
 public:
-    // we can have a shader for each material, and we can switch between them when rendering the objects
-    // static Shader test_shader;
-    // static Shader wood_shader; 
-    // static Shader something_else_shader;
-    // static Shader* materialShaders[SOMETHING_ELSE + 1];
     static Scene load_test_scene();
 
     // Projection matrix: FOV angle, aspect ratio, near and far planes
@@ -75,61 +159,87 @@ public:
     static constexpr float FAR_PLANE = 10000.0f;
     static glm::mat4 projection_matrix;
 
+    // Shader edge_accentuation_shader = ;
+    Shader edge_accentuation_shader = Shader("shaders/edge_accentuate.vert","shaders/edge_accentuate.frag");
+    Shader lighting_shader = Shader("shaders/basic_normal.vert","shaders/basic_normal.frag");
     vector<Object> objects;
+    Shader* current_shader;
     Camera camera;
     // vector<Light> lights;
-    // Light light;
+    DirectionalLight light;
 
-   // constructor (takes ownership of objects via move semantics)
-   Scene(vector<Object>&& objects, Camera camera)
-    :objects(std::move(objects)), camera(camera) {
-        //sort objects by material
-        // std::sort(this->objects.begin(), this->objects.end(), [](const Object& a, const Object& b) {
-        //     return a.material < b.material;
-        // });
+    enum RenderMode {
+        LIGHTING,
+        EDGE_ACCENTUATION,
+        SHADOWMAP
+    };
+    // constructor (takes ownership of objects via move semantics)
+    Scene(vector<Object>&& objects, Camera camera, DirectionalLight light)
+    :objects(std::move(objects)), camera(camera), light(light){
+        // edge_accentuation_shader = Shader("shaders/edge_accentuate.vert","shaders/edge_accentuate.frag");
+        // lighting_shader = Shader("shaders/basic_normal.vert","shaders/basic_normal.frag");
+        // projection_matrix = glm::perspective(glm::radians(FOV), ASPECT_RATIO, NEAR_PLANE, FAR_PLANE);
     }
-
-    using UniformValue = std::variant<float, glm::vec2, glm::vec3, glm::mat3, glm::mat4>;
     // rendering of the whole scene
-    // take in the shader to render the scene with, and a map to assign every uniform in the shader to the corresponding value in the scene (e.g. light direction, camera position, etc...)
-    void full_render(Shader* shader, const std::map<std::string, UniformValue>& uniform_values, bool obj_based_uniform_assignment = false) {
-        shader->Use();
+    void full_render(const std::map<std::string, UniformValue>& uniform_values, RenderMode mode, GLuint buffer, int render_width, int render_height) {
+        if (mode == LIGHTING)// render shadowmap first
+            full_render({}, SHADOWMAP, light.shadow_map_fb,light.shadow_map_resolution,light.shadow_map_resolution);
+        glBindFramebuffer(GL_FRAMEBUFFER, buffer);
+        glViewport(0, 0, render_width, render_height);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // glClear(GL_COLOR_BUFFER_BIT);
+        // glClear(GL_DEPTH_BUFFER_BIT);
+        if (mode == LIGHTING){
+            current_shader = &lighting_shader;
+            current_shader->Use();
+            light.set_shader_uniforms(current_shader);
+        } else if (mode == SHADOWMAP){
+            current_shader = &light.shadow_map_shader;
+            current_shader->Use();
+            glm::mat4 light_space_matrix = light.get_light_space_matrix();
+            current_shader->set_uniformMatrix4fv("lightSpaceMatrix", light_space_matrix);
+        } else if (mode == EDGE_ACCENTUATION){
+            current_shader = &edge_accentuation_shader;
+            current_shader->Use();
+        }
         // set all the custom uniform values in the shader
-        for (const auto& [name, value] : uniform_values) {
+        /*for (const auto& [name, value] : uniform_values) {
             std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (std::is_same_v<T, float>)
-                    shader->set_uniform1f(name, arg);
+                    current_shader->set_uniform1f(name, arg);
                 else if constexpr (std::is_same_v<T, glm::vec2>)
-                    shader->set_uniform2fv(name, arg);
+                    current_shader->set_uniform2fv(name, arg);
                 else if constexpr (std::is_same_v<T, glm::vec3>)
-                    shader->set_uniform3fv(name, arg);
+                    current_shader->set_uniform3fv(name, arg);
                 else if constexpr (std::is_same_v<T, glm::mat3>)
-                    shader->set_uniformMatrix3fv(name, arg);
+                    current_shader->set_uniformMatrix3fv(name, arg);
                 else if constexpr (std::is_same_v<T, glm::mat4>)
-                    shader->set_uniformMatrix4fv(name, arg);
+                    current_shader->set_uniformMatrix4fv(name, arg);
             }, value);
-        }
+        }*/
         // render objects
         for (GLuint i = 0; i < objects.size(); i++) {
-            if (obj_based_uniform_assignment) {
-                if (objects[i].material == COMPLEX)
-                    {shader->set_uniform1f("fill_in", 1.0f);}
-                else 
-                    {shader->set_uniform1f("fill_in", 0.0f);}
-                shader->set_uniform1f("object_id_in", (float)(i+1));
-                shader->set_uniform1f("object_id_in", (float)(i+1));
-                shader->set_uniform3fv("object_pos_in", objects[i].pos);
-            }
             Object* object = &objects[i];
+            if (mode == EDGE_ACCENTUATION) {
+                if (objects[i].material == COMPLEX)
+                    {current_shader->set_uniform1f("fill_in", 1.0f);}
+                else 
+                    {current_shader->set_uniform1f("fill_in", 0.0f);}
+                current_shader->set_uniform1f("object_id_in", (float)(i+1));
+                current_shader->set_uniform1f("object_id_in", (float)(i+1));
+                current_shader->set_uniform3fv("object_pos_in", objects[i].pos);
+            }
             glm::mat4 model_matrix = object->model_matrix;
-            shader->set_uniformMatrix4fv("modelMatrix", model_matrix);
-            glm::mat4 view_matrix = camera.GetViewMatrix();
-            shader->set_uniformMatrix4fv("viewMatrix", view_matrix);
-            glm::mat4 projection_matrix = this->projection_matrix;
-            shader->set_uniformMatrix4fv("projectionMatrix", projection_matrix);
-            glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(view_matrix * model_matrix)));
-            shader->set_uniformMatrix3fv("normalMatrix", normal_matrix);
+            current_shader->set_uniformMatrix4fv("modelMatrix", object->model_matrix);
+            if (mode != SHADOWMAP){
+                glm::mat4 view_matrix = camera.GetViewMatrix();
+                current_shader->set_uniformMatrix4fv("viewMatrix", view_matrix);
+                glm::mat4 projection_matrix = this->projection_matrix;
+                current_shader->set_uniformMatrix4fv("projectionMatrix", projection_matrix);
+                glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(view_matrix * model_matrix)));
+                current_shader->set_uniformMatrix3fv("normalMatrix", normal_matrix);
+            }
             object->model.Draw();
         }
     }

@@ -19,4 +19,5 @@ void main() {
         }
     }
     // FragColor = edge_color;
+    // FragColor = light_color;
 }

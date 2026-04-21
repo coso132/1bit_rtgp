@@ -31,5 +31,6 @@ Scene load_test_scene(){
     objects.push_back(Object(glm::vec3( 0.0f, -1.0f,0.0f), "models/plane.obj", SIMPLE, 5.0f));
     // objects.push_back(Object(glm::vec3( 0.0f, -100.0f,-100.0f), "models/city/OBJ/Amaryllis City.obj", SIMPLE, 0.01f));
     Camera camera(glm::vec3(0.0f, 0.0f, 7.0f), false);
-    return Scene(std::move(objects), camera);
+    DirectionalLight directional_light(glm::vec3(-1.0, -1.0,-1.0), 20.0f, Shader("shaders/19_shadowmap.vert","shaders/20_shadowmap.frag"));
+    return Scene(std::move(objects), camera, directional_light);
 }

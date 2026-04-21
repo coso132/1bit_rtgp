@@ -15,6 +15,7 @@ Universita' degli Studi di Milano
 
 // vertex position in world coordinates
 layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 normal;// we don't need the normal for the shadow map, but we need to define it to match the vertex attributes of the Mesh class
 // the numbers used for the location in the layout qualifier are the positions of the vertex attribute
 // as defined in the Mesh class
 

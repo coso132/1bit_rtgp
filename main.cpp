@@ -14,53 +14,40 @@ using namespace std;
 #ifdef _WINDOWS_
     #error windows.h was included!
 #endif
-// #include <iostream>
-// #include <ostream>
-// #include "scenes.cpp"
-// we load the GLM classes used in the application
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
-// we include the library for images loading
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
+
 // dimensions of application's window
-//TODO: figure out how to change screen resolution but keep render resolution
-// ideally screen resolution would be 2^n times render resolution 
 GLuint screenWidth = 1920, screenHeight = 1080;
+// lower resolution for rendering for aesthetic reason
 GLuint factor = 50;
 GLuint renderWidth = 16*factor, renderHeight = 9*factor;
 // GLuint renderWidth = 2560, renderHeight = 1440;
 // GLuint renderWidth = 640, renderHeight = 360;
 
-// callback functions for keyboard and mouse events
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-// if one of the WASD keys is pressed, we call the corresponding method of the Camera class
 void apply_camera_movements();
-
-
-// we initialize an array of booleans for each keyboard key
 bool keys[1024];
-
-// we need to store the previous mouse position to calculate the offset with the current frame
 GLfloat lastX, lastY;
-// when rendering the first frame, we do not have a "previous state" for the mouse, so we need to manage this situation
 bool firstMouse = true;
-//MY FUNCTIONS
+
+//NEW FUNCTIONS (unseen in lectures)
 GLFWwindow* setup_openGL(int* width, int* height);
-void setup_material_shaders();
 Scene load_test_scene();
 int create_quad_vao(GLuint* vao, GLuint* vbo);
 int create_framebuffer(GLuint* framebuffer, GLuint* texture, GLuint* depth_buffer);
 //fps calculations
 GLfloat fps, current_time, last_time,delta_time = 1.0f;
 void update_deltatime();
-
+// scene being rendered
 Scene* selected_scene;
 
-// Vertex data for a full-screen quad (two triangles)
+// fullscren quad for post processing 
 float quadVertices[] = {
     // positions     // tex coords
     -1.0f,  1.0f,    0.0f, 1.0f,
@@ -82,20 +69,13 @@ int main(){
     GLFWwindow* window = setup_openGL(&width, &height);
     if (!window) return -1;
 
-    // rendering shaders
-    // setup lighting 
-    Shader lighting_shader("shaders/basic_normal.vert", "shaders/basic_normal.frag");
-    std::map<std::string, Scene::UniformValue> lighting_uniforms;
-    glm::vec3 light_dir = glm::normalize(glm::vec3(-1.0f, -1.0f, 0.0f));
-    lighting_uniforms["lightDir"] = light_dir;
+    // lighting fb
+    std::map<std::string, UniformValue> lighting_uniforms;
     GLuint lighting_fb, lighting_tex, lighting_db;
     if (create_framebuffer(&lighting_fb, &lighting_tex, &lighting_db) != 0) {
         std::cout << "Failed to create framebuffer!" << std::endl;
         return -1;}
-
-    // setup edge accentuation 
-    Shader edge_shader("shaders/edge_accentuate.vert", "shaders/edge_accentuate.frag");
-    std::map<std::string, Scene::UniformValue> edge_uniforms;
+    // edge accentuation fb
     GLuint edge_fb, edge_tex, edge_db;
     if (create_framebuffer(&edge_fb, &edge_tex, &edge_db) != 0) {
         std::cout << "Failed to create framebuffer!" << std::endl;
@@ -115,11 +95,7 @@ int main(){
         std::cout << "Failed to create framebuffer!" << std::endl;
         return -1;}
 
-
     // post-processing shaders
-    // setup dither shader 
-    // Shader dither_shader("shaders/dither.vert", "shaders/dither.frag");
-    // setup combining/upscaling shader 
     Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
 
     // we create the VAO and VBO for the full-screen quad
@@ -145,32 +121,25 @@ int main(){
         glfwPollEvents();
         apply_camera_movements();
 
-        // rotate light direction for testing
-        float rotateY = glm::radians(20.0f) * delta_time * 60.0f; // rotate 20 degrees per second
-        light_dir = glm::rotate(glm::mat4(1.0f), glm::radians(rotateY), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(light_dir, 1.0f);
-        lighting_uniforms["lightDir"] = light_dir;
-        // rotateY += 0.01f;
+        //////////ON FRAME EVENTS///////////////////////
+        selected_scene->light.rotate(30.0f * delta_time, glm::vec3(0.0,1.0f,0.0f));
+        /////////////////////////////////
 
-        /*
-        Render pipeline:
-        1. render the scene at a low resolution with accentuated edges
-        2. apply edge detection 
-        3. upscale to screen resolution with nearest neighbor to keep the pixelated look
-        */
+        /*  Render pipeline:
+          1. render the scene at a low resolution with accentuated edges
+          2. render the scene at a low resolution with lighting only
+          3. apply edge detection to edge accentuated render
+          4. combine the edge detection's output with the lighting render to get the final low-res render
+          5. upscale to screen resolution with nearest neighbor to keep the pixelated look*/
 
-        // we render the scene
-        // edge-accentuating render pass
-        glBindFramebuffer(GL_FRAMEBUFFER, edge_fb);
-        glViewport(0, 0, renderWidth, renderHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        test_scene.full_render(&edge_shader, edge_uniforms,true);
-        // lighting render pass
-        glBindFramebuffer(GL_FRAMEBUFFER, lighting_fb);
-        glViewport(0, 0, renderWidth, renderHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        test_scene.full_render(&lighting_shader, lighting_uniforms);
+        // 2. lighting render pass
+        test_scene.full_render({}, Scene::LIGHTING, lighting_fb, renderWidth,renderHeight);
 
-        // edge detection pass
+        // 1. edge-accentuating render pass
+        test_scene.full_render({}, Scene::EDGE_ACCENTUATION, edge_fb, renderWidth,renderHeight);
+
+        // from now on this is all post processing
+        // 3. edge detection pass
         glBindFramebuffer(GL_FRAMEBUFFER, edge_detect_fb);
         glViewport(0, 0, renderWidth, renderHeight);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -181,7 +150,7 @@ int main(){
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         
-        // combination pass (lighting + edge detection's outline)
+        // 4. combination pass (lighting + edge detection's outline)
         glBindFramebuffer(GL_FRAMEBUFFER, combine_fb);
         glViewport(0, 0, renderWidth, renderHeight);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -195,7 +164,7 @@ int main(){
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         
-        // we upscale and apply other prost processing
+        // 5. we upscale 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, screenWidth, screenHeight);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -203,6 +172,7 @@ int main(){
         upscale_shader.set_uniform1i("lowResTexture", 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, combine_tex);
+        // glBindTexture(GL_TEXTURE_2D, selected_scene->light.shadow_map_depth_map);
         // glBindTexture(GL_TEXTURE_2D, low_res_texture);
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
