@@ -1,16 +1,17 @@
 #include "main.h"
-#include "misc.h"
 
 //////// RENDER PARAMETERS ///////////
 enum debugMode {
-    NONE,
-    EDGE_ACCENTUATION,
-    ONLY_EDGE,
-    ONLY_LIGHTING,
-    SHADOWMAP,
+    debug_NONE,
+    debug_EDGE_ACCENTUATION,
+    debug_EDGE_ACCENTUATION2,
+    debug_ONLY_EDGE,
+    debug_ONLY_LIGHTING,
+    debug_SHADOWMAP,
 };
-debugMode debug = NONE;
-bool vsync = true;
+debugMode debug = debug_NONE;
+bool vsync = false;
+bool rotate_light = true;
 
 int screenWidth = 1920, screenHeight = 1080;
 GLuint factor = 50;
@@ -45,16 +46,19 @@ int main(){
     update_deltatime();
 
     std::cout << "Setting up OpenGL..." << std::endl;
-    GLFWwindow* window = setup_openGL(&screenWidth, &screenHeight, key_callback, mouse_callback, true);
+    GLFWwindow* window = setup_openGL(&screenWidth, &screenHeight, key_callback, mouse_callback, vsync);
     if (!window) return -1;
 
     // SETUP OF THE FRAMEBUFFERS FOR THE RENDERING PIPELINE
     // lighting fb
     GLuint lighting_fb, lighting_tex, lighting_db, combine_fb, combine_tex, combine_db, edge_fb, edge_tex, edge_db,edge_detect_fb, edge_detect_tex, edge_detect_db;
     create_pipeline_buffers(renderWidth, renderHeight, &lighting_fb, &lighting_tex, &lighting_db, &edge_fb, &edge_tex, &edge_db, &edge_detect_fb, &edge_detect_tex, &edge_detect_db, &combine_fb, &combine_tex, &combine_db);
+    GLuint edge2_fb, edge2_tex, edge2_db;
+    create_framebuffer(&edge2_fb,&edge2_tex,&edge2_db,renderWidth,renderHeight);
     
     // POST PROCESSING AND OTHER SHADERS
-    Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect.frag");
+    // Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect.frag");
+    Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect_aa.frag");
     Shader combine_shader("shaders/combine.vert", "shaders/combine.frag");
     Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
 
@@ -62,8 +66,9 @@ int main(){
     create_quad_vao(&quadVAO, &quadVBO, quadVertices,sizeof(float)*24);
 
     // SCENE LOADING
-    Scene test_scene = load_test_scene();
-    selected_scene = &test_scene;
+    Scene scene = load_test_scene();
+    // Scene scene = load_cottage2_scene();
+    selected_scene = &scene;
 
     char title[256];
     int n_frame = 0;
@@ -83,7 +88,8 @@ int main(){
         apply_camera_movements();
 
         //////////ON FRAME EVENTS/////////
-        selected_scene->light.rotate(30.0f * delta_time, glm::vec3(0.0,1.0f,0.0f));
+        if (rotate_light)
+            selected_scene->light.rotate(15.0f * delta_time, glm::vec3(0.0,1.0f,0.0f));
         /////////////////////////////////
 
         /*  Render pipeline:
@@ -94,29 +100,33 @@ int main(){
           5. upscale to screen resolution with nearest neighbor to keep the pixelated look*/
 
         // 1. lighting render pass
-        test_scene.full_render({}, Scene::LIGHTING, lighting_fb, renderWidth,renderHeight);
+        selected_scene->full_render({}, LIGHTING, lighting_fb, renderWidth,renderHeight);
 
         // 2. edge-accentuating render pass
-        test_scene.full_render({}, Scene::EDGE_ACCENTUATION, edge_fb, renderWidth,renderHeight);
+        selected_scene->full_render({},EDGE_ACCENTUATION, edge_fb, renderWidth,renderHeight);
+        selected_scene->full_render({},EDGE_ACCENTUATION2, edge2_fb, renderWidth,renderHeight);
 
         // 3. edge detection pass
-        post_process(edge_detect_fb, {edge_tex}, {"lowResTexture"}, edge_detect_shader, renderWidth, renderHeight);
+        // post_process(edge_detect_fb, {edge_tex}, {"lowResTexture"}, edge_detect_shader, renderWidth, renderHeight);
+        post_process(edge_detect_fb, {edge_tex, edge2_tex}, {"edge1_texture", "edge2_texture"}, edge_detect_shader, renderWidth, renderHeight);
         
         // 4. combination pass (lighting + edge detection's outline)
         post_process(combine_fb, {lighting_tex, edge_detect_tex}, {"lightingTexture", "edgeTexture"}, combine_shader, renderWidth, renderHeight);
         
         // debug mode 
         GLuint* final_texture;
-        if (debug == NONE) 
+        if (debug == debug_NONE) 
             final_texture = &combine_tex;
-        else if (debug == ONLY_EDGE) 
+        else if (debug == debug_ONLY_EDGE) 
             final_texture = &edge_detect_tex;
-        else if (debug == EDGE_ACCENTUATION) 
+        else if (debug == debug_EDGE_ACCENTUATION) 
             final_texture = &edge_tex;
-        else if (debug == ONLY_LIGHTING) 
-            final_texture = &lighting_tex;
-        else if (debug == SHADOWMAP)
-            final_texture = &test_scene.light.shadow_map_depth_map;
+        else if (debug == debug_EDGE_ACCENTUATION2) 
+            final_texture = &edge2_tex;
+        else if (debug == debug_ONLY_LIGHTING) {
+            final_texture = &lighting_tex;}
+        else if (debug == debug_SHADOWMAP){
+            final_texture = &(selected_scene->light.shadow_map_depth_map);}
         
         // 5. we upscale 
         post_process(0, {*final_texture}, {"lowResTexture"}, upscale_shader, screenWidth, screenHeight);
@@ -184,7 +194,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
-    else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_1 + SHADOWMAP && action == GLFW_PRESS){
+    else if (key == GLFW_KEY_R && action == GLFW_PRESS){
+        rotate_light = !rotate_light;
+    }else if (key >= GLFW_KEY_1 && key <= (GLFW_KEY_1 + debug_SHADOWMAP) && action == GLFW_PRESS){
+        // std::cout << "DEBUG MOVE " << key << std::endl;
         debug = static_cast<debugMode>(key - GLFW_KEY_1);
     }
     if(action == GLFW_PRESS)

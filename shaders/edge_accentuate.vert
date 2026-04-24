@@ -19,9 +19,13 @@ flat out vec3 N;
 out vec3 pos;
 out float object_id;
 out float fill;
+out float distance;
 
 void main()
 {
+    vec4 idk = viewMatrix * modelMatrix * vec4(position,1.0);
+    // distance = length(idk.xyz);
+
     gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
     N = normalize(normalMatrix * normal);
     pos = (viewMatrix * modelMatrix * vec4(object_pos_in, 1.0)).xyz;

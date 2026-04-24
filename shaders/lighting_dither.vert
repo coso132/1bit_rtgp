@@ -2,6 +2,7 @@
 
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
+layout (location = 2) in vec2 UV;
 
 uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
@@ -14,6 +15,7 @@ uniform mat4 lightSpaceMatrix; // from world coordinates to light's clip space
 out vec3 N;
 out vec3 L;
 out vec4 FragPosLightSpace;
+out vec2 interp_UV;
 
 void main()
 {
@@ -25,4 +27,5 @@ void main()
     L = normalize(lightDirView);
 
     FragPosLightSpace = lightSpaceMatrix * worldPos;
+    interp_UV = UV;
 }

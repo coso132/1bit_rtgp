@@ -4,6 +4,7 @@
 #include <utils/model.h>
 #include <utils/camera.h>
 #include <utils/scene.h>
+#include <utils/misc.h>
 
 #include <string>
 #ifdef _WIN32
