@@ -29,15 +29,17 @@ public:
     vector<Object> objects;
     Shader* current_shader;
     Camera camera;
-    // vector<Light> lights; // multiple lights not implemented yet
-    DirectionalLight light; // singular directional light for now
+    DirectionalLight directional_light; // singular directional light for now
+    vector<PointLight> point_lights; // multiple point lights
+    
+    // blue noise texture
     GLuint blue_noise;
 
     
 
     // constructor
-    Scene(vector<Object>&& objects, Camera camera, DirectionalLight light)
-    :objects(std::move(objects)), camera(camera), light(light){
+    Scene(vector<Object>&& objects, Camera camera, DirectionalLight light, vector<PointLight> point_lights)
+    :objects(std::move(objects)), camera(camera), directional_light(light), point_lights(point_lights){
         blue_noise = load_image("textures/blue_noise.png");
     }
 
@@ -45,7 +47,7 @@ public:
     // rendering of the whole scene based on render mode
     void full_render(const std::map<std::string, UniformValue>& uniform_values, RenderMode mode, GLuint buffer, int render_width, int render_height) {
         if (mode == LIGHTING)// if lighting needs to be calculated then render shadowmap first
-            full_render({}, SHADOWMAP, light.shadow_map_fb,light.shadow_map_resolution,light.shadow_map_resolution);
+            full_render({}, SHADOWMAP, directional_light.shadow_map_fb,directional_light.shadow_map_resolution,directional_light.shadow_map_resolution);
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, buffer);
         glViewport(0, 0, render_width, render_height);
@@ -53,15 +55,23 @@ public:
         if (mode == LIGHTING){
             current_shader = &lighting_shader;
             current_shader->Use();
-            light.set_shader_uniforms(current_shader);
+            directional_light.set_shader_uniforms(current_shader);
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, blue_noise);
             current_shader->set_uniform1i("blue_noise",2);
+            int nl = point_lights.size();
+            current_shader->set_uniform1i("numPointLights",nl);
+            for (int i = 0; i < nl; i++){
+                string si = to_string(i);
+                string pli = ("pointLightIntensity[" + si + ']').c_str();
+                string plp =("PointLightPos["+si+']').c_str();
+                point_lights[i].set_shader_uniforms(current_shader, pli, plp);
+            }
             // shader->set_uniform1f("textured",1.0);
         } else if (mode == SHADOWMAP){
-            current_shader = &light.shadow_map_shader;
+            current_shader = &directional_light.shadow_map_shader;
             current_shader->Use();
-            glm::mat4 light_space_matrix = light.get_light_space_matrix();
+            glm::mat4 light_space_matrix = directional_light.get_light_space_matrix();
             current_shader->set_uniformMatrix4fv("lightSpaceMatrix", light_space_matrix);
         } else if (mode == EDGE_ACCENTUATION ){
             current_shader = &edge_accentuation_shader;

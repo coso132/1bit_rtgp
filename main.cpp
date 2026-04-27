@@ -89,13 +89,20 @@ int main(){
 
         //////////ON FRAME EVENTS/////////
         if (rotate_light)
-            selected_scene->light.rotate(15.0f * delta_time, glm::vec3(0.0,1.0f,0.0f));
+            selected_scene->directional_light.rotate(15.0f * delta_time, glm::vec3(0.0,1.0f,0.0f));
+        if (rotate_light){
+            float old_pos = selected_scene->point_lights[1].position[2];
+            float new_pos = fmod(old_pos + (5.0f*delta_time), 10.0f);
+            selected_scene->point_lights[1].position[2] = new_pos;
+            selected_scene->objects[13].set_position(selected_scene->point_lights[1].position);
+        }
         /////////////////////////////////
 
         /*  Render pipeline:
           1. render the scene at a low resolution with lighting only
-          2. render the scene at a low resolution with accentuated edges
-          3. apply edge detection to edge accentuated render
+          2a. render the scene at a low resolution with accentuated edges
+          2b. render the scene at a low resolution with normal maps 
+          3. apply edge detection to edge accentuated render and normal maps and combine them
           4. combine the edge detection's output with the lighting render to get the final low-res render
           5. upscale to screen resolution with nearest neighbor to keep the pixelated look*/
 
@@ -126,7 +133,7 @@ int main(){
         else if (debug == debug_ONLY_LIGHTING) {
             final_texture = &lighting_tex;}
         else if (debug == debug_SHADOWMAP){
-            final_texture = &(selected_scene->light.shadow_map_depth_map);}
+            final_texture = &(selected_scene->directional_light.shadow_map_depth_map);}
         
         // 5. we upscale 
         post_process(0, {*final_texture}, {"lowResTexture"}, upscale_shader, screenWidth, screenHeight);

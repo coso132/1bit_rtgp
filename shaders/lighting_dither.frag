@@ -10,10 +10,20 @@ in vec2 interp_UV;
 uniform sampler2D shadowMap;
 uniform sampler2D tex;
 uniform sampler2D blue_noise;
+uniform mat4 viewMatrix;
+
 
 uniform float textured;
 uniform float repeat;
 uniform int noise_type;
+
+#define MAX_POINT_LIGHTS 8
+in vec4 mv;
+uniform int numPointLights;
+uniform vec3 PointLightPos[MAX_POINT_LIGHTS];
+uniform float pointLightIntensity[MAX_POINT_LIGHTS];
+// in vec3 pointL;
+// in vec3 positionView;
 
 // Shadow calculation using simple PCF (3x3)
 float calculateShadow(vec4 fragPosLightSpace) {
@@ -27,7 +37,9 @@ float calculateShadow(vec4 fragPosLightSpace) {
         return 1.0; // fully lit
     
     float currentDepth = projCoords.z;
-    float bias = max(0.002 * (1.0 - dot(normalize(N), normalize(L))), 0.0002);
+    float bias_min = 0.0010;
+    float bias_max = 0.010;
+    float bias = max(bias_max * (1.0 - dot(normalize(N), normalize(L))), bias_min);
     
     float shadow = 0.0;
     vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
@@ -91,16 +103,49 @@ void main(){
         // return;
         tex_factor = length(surfaceColor.rgb);
     }
-    // only red channel
-    // surfaceColor = vec4(vec3(surfaceColor.r),1.0);
-    float shadowFactor=calculateShadow(FragPosLightSpace);
-    // shadowFactor = step(0.5,shadowFactor);
-    shadowFactor = smoothstep(0.3,0.6,shadowFactor);
 
+    //directional light shadowmap
+    float shadowFactor=calculateShadow(FragPosLightSpace);
+    shadowFactor = smoothstep(0.3,0.6,shadowFactor);
+    //directional light diffuse
+    float diffDir = max(dot(n,l),0.0);
+    float dirLightContrib = diffDir * shadowFactor;
+
+    //point light diffuse
+    // vec4 lightPos = viewMatrix * vec4(PointLightPos[i],1.0);
+    // vec3 lightDir = (lightPos.xyz - mv.xyz);
+    // float distance = 2*length(lightDir);
+    // lightDir = lightDir/distance;
+    // float diffPoint = max(dot(lightDir,n),0.0);
+    // // attenuation 
+    // float attenuation = pointLightIntensity/(distance*distance + 1.0);
+    // float pointLightContrib = diffPoint*attenuation;
+    // vec3 positionWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+
+    float pointLightContrib = 0.0;
+    for (int i = 0; i < numPointLights; i++) {
+        vec4 lightPos = viewMatrix * vec4(PointLightPos[i],1.0);
+        vec3 lightDir = (lightPos.xyz - mv.xyz);
+        float distance = 2*length(lightDir);
+        lightDir = lightDir/distance;
+        float diffPoint = max(dot(lightDir,n),0.0);
+        // attenuation 
+        float attenuation = pointLightIntensity[i]/(distance*distance + 1.0);
+        float addAmount = (diffPoint*attenuation);
+        // addAmount = smoothstep(0.0,0.6,addAmount);
+        pointLightContrib += diffPoint*attenuation;
+    }
+
+
+    // combination
 	float ambient = 0.1;
-    float rawDiffuse = max(dot(n,l),0.0);
-    float diffuse = ambient + (rawDiffuse*(1.0 - ambient) * tex_factor) * shadowFactor;
-    diffuse = smoothstep(0.2,0.8,diffuse);
+    float rawDiffuse = (ambient + dirLightContrib + pointLightContrib);
+    // float diffuse = rawDiffuse * tex_factor;
+    // rawDiffuse = floor(rawDiffuse * 3.0)/3.0;
+    rawDiffuse = smoothstep(0.2,0.8,rawDiffuse);
+    // rawDiffuse = clamp(rawDiffuse, 0.0, 1.0);
+    float diffuse = rawDiffuse * tex_factor;
+    diffuse = floor(diffuse * 4.0)/4.0;
     
     if (noise_type == 0){
         colorFrag = bayer_dither(diffuse);}
@@ -109,4 +154,5 @@ void main(){
     // colorFrag = vec4(vec3(finalIntensity), 1.0);
     // debugging purposes
     // colorFrag = vec4(vec3(diffuse), 1.0);
+    // colorFrag = vec4(vec3(shadowFactor), 1.0);
 }

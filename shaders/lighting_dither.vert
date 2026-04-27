@@ -16,11 +16,14 @@ out vec3 N;
 out vec3 L;
 out vec4 FragPosLightSpace;
 out vec2 interp_UV;
+// out vec3 pointL;
+out vec4 mv;
 
 void main()
 {
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
+    mv = viewMatrix * worldPos;
+    gl_Position = projectionMatrix * mv;
 
     N = normalize(normalMatrix * normal);
     vec3 lightDirView = mat3(viewMatrix) * (-directionalLightDirection);

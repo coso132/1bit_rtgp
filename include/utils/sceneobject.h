@@ -38,6 +38,7 @@ public:
     bool textured{false};
     Model model;
     NoiseType noise_type{BAYER};
+    float scale;
 
     Object(glm::vec3 pos, const string& model_filepath, Material material, const char* texture_filepath, NoiseType noise_type, float scale, glm::vec3 rotate = glm::vec3(0.0f,1.0f,0.0f), float radians=0.f) 
         : pos(pos), material(material), model(model_filepath), noise_type(noise_type) {
@@ -45,6 +46,7 @@ public:
         this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
         this->model_matrix = glm::scale(this->model_matrix, glm::vec3(scale));
         this->model_matrix = glm::rotate(this->model_matrix, radians, rotate);
+        this->scale = scale;
     }
     Object(glm::vec3 pos, const string& filepath, Material material) 
         : pos(pos), material(material), model(filepath) {
@@ -59,9 +61,16 @@ public:
     Object(Object&&) = default;
     Object& operator=(Object&&) = default;
 
-    void update_position(glm::vec3 new_pos) {
+    void set_position(glm::vec3 new_pos) {
         this->pos = new_pos;
-        this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
+        update_model_matrix();
+    }
+
+    void update_model_matrix() {
+        glm::mat4 trans = glm::translate(glm::mat4(1.0f), pos);
+        // glm::mat4 rot = glm::mat4_cast(orientation); // if using quaternion
+        glm::mat4 sca = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+        this->model_matrix = trans * sca; // world translation first (leftmost)
     }
 
     void draw(RenderMode mode, Shader* shader){
