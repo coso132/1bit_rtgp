@@ -84,6 +84,12 @@ public:
         for (GLuint i = 0; i < objects.size(); i++) {
             Object* object = &objects[i];
             // if we are accentuating edges we need to feed the shader the object_id, position, and whether it should be filled in or not
+            current_shader->set_uniform1i("dust",0);
+            if (mode != EDGE_ACCENTUATION2 && object->material == DUST)
+                continue;
+            else if (mode == EDGE_ACCENTUATION2 && object->material == DUST){
+                current_shader->set_uniform1i("dust",1);
+            }
             if (mode == EDGE_ACCENTUATION) {
                 if (objects[i].material == COMPLEX)
                     {current_shader->set_uniform1f("fill_in", 1.0f);}

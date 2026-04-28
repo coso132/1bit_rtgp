@@ -130,7 +130,18 @@ public:
         // VAO is made "active"
         glBindVertexArray(this->VAO);
         // rendering of data in the VAO
+        // glDrawElements(GL_POINTS, this->indices.size(), GL_UNSIGNED_INT, 0);
         glDrawElements(GL_TRIANGLES, this->indices.size(), GL_UNSIGNED_INT, 0);
+        // VAO is "detached"
+        glBindVertexArray(0);
+    }
+    void DrawPoints(int n)
+    {
+        // VAO is made "active"
+        glBindVertexArray(this->VAO);
+        // rendering of data in the VAO
+        glDrawElementsInstanced(GL_POINTS, this->indices.size(), GL_UNSIGNED_INT, 0, n);
+        // glDrawElements(GL_TRIANGLES, this->indices.size(), GL_UNSIGNED_INT, 0);
         // VAO is "detached"
         glBindVertexArray(0);
     }

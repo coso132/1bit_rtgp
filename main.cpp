@@ -14,7 +14,7 @@ bool vsync = false;
 bool rotate_light = true;
 
 int screenWidth = 1920, screenHeight = 1080;
-GLuint factor = 50;
+GLuint factor = 40;
 GLuint renderWidth = 16*factor, renderHeight = 9*factor;
 // GLuint renderWidth = screenWidth, renderHeight = screenHeight;
 // GLuint renderWidth = 640, renderHeight = 360;
@@ -115,7 +115,7 @@ int main(){
 
         // 3. edge detection pass
         // post_process(edge_detect_fb, {edge_tex}, {"lowResTexture"}, edge_detect_shader, renderWidth, renderHeight);
-        post_process(edge_detect_fb, {edge_tex, edge2_tex}, {"edge1_texture", "edge2_texture"}, edge_detect_shader, renderWidth, renderHeight);
+        post_process(edge_detect_fb, {edge_tex, edge2_tex, selected_scene->blue_noise}, {"edge1_texture", "edge2_texture", "blue_noise"}, edge_detect_shader, renderWidth, renderHeight);
         
         // 4. combination pass (lighting + edge detection's outline)
         post_process(combine_fb, {lighting_tex, edge_detect_tex}, {"lightingTexture", "edgeTexture"}, combine_shader, renderWidth, renderHeight);
@@ -154,7 +154,7 @@ void post_process(GLuint buffer, vector<GLuint> textures, vector<string> texture
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     shader.Use();
-    shader.set_uniform1i("lowResTexture", 0);
+    // shader.set_uniform1i("lowResTexture", 0);
     for (size_t i = 0; i < textures.size(); i++)
     {
         shader.set_uniform1i(texture_names[i], i);

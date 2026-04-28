@@ -12,11 +12,13 @@
 enum Material {
     SIMPLE,
     COMPLEX,
+    DUST,
     SOMETHING_ELSE,
 };
 enum NoiseType{
     BAYER,
     BLUE_NOISE,
+    NONE,
 };
 // different possible render passes
 enum RenderMode {
@@ -38,7 +40,7 @@ public:
     bool textured{false};
     Model model;
     NoiseType noise_type{BAYER};
-    float scale;
+    float scale{1.0f};
 
     Object(glm::vec3 pos, const string& model_filepath, Material material, const char* texture_filepath, NoiseType noise_type, float scale, glm::vec3 rotate = glm::vec3(0.0f,1.0f,0.0f), float radians=0.f) 
         : pos(pos), material(material), model(model_filepath), noise_type(noise_type) {
@@ -91,7 +93,10 @@ public:
             glBindTexture(GL_TEXTURE_2D, 0);
             shader->set_uniform1f("textured",0.0);
         }
-        this->model.Draw();
+        if (material == DUST)
+            this->model.DrawPoints((int)(6*this->scale));
+        else 
+            this->model.Draw();
         glBindTexture(GL_TEXTURE_2D, 0);
     }
     // should add rotation and other stuff

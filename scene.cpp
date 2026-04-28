@@ -11,7 +11,7 @@ Scene load_test_scene(){
     objects.push_back(Object(
         glm::vec3( -15.0f, 0.0f,-15.0f), 
         "models/cossack/CossackFull.obj", 
-        COMPLEX,
+        DUST,
         "models/cossack/Material_Base_Color.png",
         BLUE_NOISE,
         1.0f));
@@ -107,20 +107,27 @@ Scene load_test_scene(){
         COMPLEX,
         "textures/SoilCracked.png",  // texture 
         BAYER,                          // noise type
-        0.2f
+        1.0f
         // glm::vec3( 0.0f, 0.0f, 1.0f),
         // 1.5708f
     ));
     objects.push_back(Object(
         glm::vec3( -8.0f, 3.0f,-2.0f), 
         "models/sphere.obj", 
-        COMPLEX,
+        DUST,
         "textures/SoilCracked.png",  // texture 
         BAYER,                          // noise type
-        0.2f
+        1.0f
         // glm::vec3( 0.0f, 0.0f, 1.0f),
         // 1.5708f
     ));
+    objects.push_back(Object(
+        glm::vec3( 20.0f, 1.0f,-1.0f), 
+        "models/sphere.obj", 
+        DUST, 
+        "textures/white.png",  // texture 
+        NONE,                          // noise type
+        6.0f));
     // objects.push_back(Object(glm::vec3( 0.0f, -100.0f,-100.0f), "models/city/OBJ/Amaryllis City.obj", SIMPLE, 0.01f));
     Camera camera(glm::vec3(0.0f, 0.0f, 7.0f), false);
     DirectionalLight directional_light(glm::vec3(1.0, -0.6,0.0), 50.0f, Shader("shaders/19_shadowmap.vert","shaders/20_shadowmap.frag"));

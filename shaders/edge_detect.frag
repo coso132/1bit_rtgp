@@ -5,13 +5,32 @@ in vec2 TexCoord;
 out vec4 FragColor;
 uniform sampler2D edge1_texture;
 uniform sampler2D edge2_texture;
+
+uniform sampler2D blue_noise;
 // edge detection kernel 
 const float kernel[9] = float[](
     -1, -1, -1,
     -1,  8, -1,
     -1, -1, -1
 );
+
 void main() {
+
+    FragColor = vec4(vec3(texture(edge2_texture, TexCoord)), 1.0);
+    return
+
+    if (texture(edge2_texture, TexCoord).b >= 0.9){
+        FragColor = vec4(vec3(1.0), 1.0);
+        return;
+        float threshold = 0.9;
+        float diffuse = (texture(blue_noise, TexCoord)).r;
+        // float diffuse = (texture(blue_noise, TexCoord/64.0)).r;
+        // float finalIntensity = (diffuse > threshold) ? 1.0 : 0.0;
+        // FragColor = vec4(vec3(finalIntensity), 1.0);
+        FragColor = vec4(vec3(diffuse), 1.0);
+        return;
+    }
+
     vec2 tex_offset = 1.0 / textureSize(edge1_texture, 0); // gets size of single texel
     vec3 result = vec3(0.0);
     // apply the kernel to the neighboring pixels
