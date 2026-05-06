@@ -20,7 +20,7 @@ Scene load_test_scene(){
         glm::vec3( 15.0f, 0.0f,-15.0f), 
         "models/cottage2/Cottage_FREE.obj", 
         SIMPLE,
-        "models/cottage2/Cottage_Clean_Base_Color.png",
+        "models/cottage2/Cottage_Clean_Base_Color2.png",
         BLUE_NOISE,
         1.0f));
     objects[1].LoadNormalTexture("models/cottage2/Cottage_Clean_Normal.png");
@@ -40,9 +40,9 @@ Scene load_test_scene(){
         1.0f));
     objects.push_back(Object(
         glm::vec3( 0.0f, 1.0f,-1.0f), 
-        "models/sphere.obj", 
+        "models/sfera2.obj", 
         COMPLEX, 
-        "textures/white.png",  // texture 
+        "textures/blue_noise.png",  // texture 
         BLUE_NOISE,                          // noise type
         1.0f));
     objects.push_back(Object(
@@ -128,9 +128,24 @@ Scene load_test_scene(){
         "textures/white.png",  // texture 
         NONE,                          // noise type
         6.0f));
+    objects.push_back(Object(
+        glm::vec3( -15.0f, 0.0f,-12.0f), 
+        "models/cossack/CossackFull.obj", 
+        COMPLEX,
+        "models/cossack/Material_Base_Color.png",
+        BLUE_NOISE,
+        1.0f));
+ 
+    // objects.push_back(Object(
+    //     glm::vec3(-5.0f, 10.0f,-100.0f), 
+    //     "models/bunny_lp.obj", 
+    //     DUST, 
+    //     "textures/white.png",  // texture 
+    //     BLUE_NOISE,                          // noise type
+    //     20.5f));
     // objects.push_back(Object(glm::vec3( 0.0f, -100.0f,-100.0f), "models/city/OBJ/Amaryllis City.obj", SIMPLE, 0.01f));
     Camera camera(glm::vec3(0.0f, 0.0f, 7.0f), false);
-    DirectionalLight directional_light(glm::vec3(1.0, -0.6,0.0), 50.0f, Shader("shaders/19_shadowmap.vert","shaders/20_shadowmap.frag"));
+    DirectionalLight directional_light(glm::vec3(1.0, -0.6,0.0), 50.0f);
     std::vector<PointLight> point_lights = {
         PointLight({8.0f,3.0f,0.0f},300.0f),
         PointLight({-8.0f,3.0f,-2.0f},100.0f),
@@ -154,7 +169,7 @@ Scene load_cottage1_scene(){
     // objects.push_back(Object(glm::vec3( 0.0f, 0.0f,0.0f), "models/plane.obj", SIMPLE,"textures/SoilCracked.png", 5.0f));
     // objects.push_back(Object(glm::vec3( 0.0f, -100.0f,-100.0f), "models/city/OBJ/Amaryllis City.obj", SIMPLE, 0.01f));
     Camera camera(glm::vec3(0.0f, 2.0f, 7.0f), false);
-    DirectionalLight directional_light(glm::vec3(-1.0, -0.8,0.0), 20.0f, Shader("shaders/19_shadowmap.vert","shaders/20_shadowmap.frag"));
+    DirectionalLight directional_light(glm::vec3(-1.0, -0.8,0.0), 20.0f);
     return Scene(std::move(objects), camera, directional_light,{});
 }
 // test scene
@@ -178,6 +193,6 @@ Scene load_cottage2_scene(){
         BAYER,
         5.0f));
     Camera camera(glm::vec3(0.0f, 2.0f, 7.0f), false);
-    DirectionalLight directional_light(glm::vec3(-1.0, -0.8,-1.0), 30.0f, Shader("shaders/19_shadowmap.vert","shaders/20_shadowmap.frag"));
+    DirectionalLight directional_light(glm::vec3(-1.0, -0.8,-1.0), 30.0f);
     return Scene(std::move(objects), camera, directional_light,{});
 }

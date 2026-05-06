@@ -25,7 +25,7 @@ void main() {
         float finalIntensity = (diffuse > threshold) ? 1.0 : 0.0;
         FragColor = vec4(vec3(finalIntensity), 1.0);
         // FragColor = vec4(vec3(diffuse), 1.0);
-        // FragColor = vec4(vec3(1.0), 1.0);
+        FragColor = vec4(vec3(1.0), 1.0);
         return;
     }
 
