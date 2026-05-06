@@ -59,55 +59,50 @@ int main(){
     GLFWwindow* window = setup_openGL(&screenWidth, &screenHeight, key_callback, mouse_callback, vsync);
     if (!window) return -1;
 
-    // SETUP OF THE FRAMEBUFFERS FOR THE RENDERING PIPELINE
-    // lighting fb
-    GLuint lighting_fb, lighting_tex, lighting_db, combine_fb, combine_tex, combine_db, edge_fb, edge_tex, edge_db,edge_detect_fb, edge_detect_tex, edge_detect_db;
-    create_pipeline_buffers(renderWidth, renderHeight, &lighting_fb, &lighting_tex, &lighting_db, &edge_fb, &edge_tex, &edge_db, &edge_detect_fb, &edge_detect_tex, &edge_detect_db, &combine_fb, &combine_tex, &combine_db);
-    GLuint edge2_fb, edge2_tex, edge2_db;
-    // create_framebuffer(&edge2_fb,&edge2_tex,&edge2_db,renderWidth,renderHeight);
-    create_framebuffer(&edge2_fb,&edge2_tex,&edge2_db,renderWidth,renderHeight);
-    
+    std::cout << "Loading scene..." << std::endl;
     // SCENE LOADING
     Scene scene = load_test_scene();
-    // Scene scene = load_cottage2_scene();
     selected_scene = &scene;
-
-    // Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect.frag");
-    Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect_aa.frag");
-    Shader edge_detect2_shader("shaders/edge_detect2.vert", "shaders/edge_detect2.frag");
-    Shader combine_shader("shaders/combine.vert", "shaders/combine.frag");
-    Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
-
-    Shader edge_accentuation_shader = Shader("shaders/edge_accentuate.vert","shaders/edge_accentuate.frag");
-    scene.edge_accentuation_shader = edge_accentuation_shader;
-    Shader edge_accentuation2_shader = Shader("shaders/edge_accentuate2.vert","shaders/edge_accentuate2.frag");
-    scene.edge_accentuation2_shader = edge_accentuation2_shader;
-    Shader wireframe_shader = Shader("shaders/wf.vert","shaders/wf.frag","shaders/wf.geom");
-    scene.wireframe_shader = wireframe_shader;
-    // Shader lighting_shader = Shader("shaders/lighting_dither.vert","shaders/lighting_dither.frag");
-    Shader lighting_shader = Shader("shaders/lighting_dither.vert","shaders/lighting_dither.frag");
-    scene.lighting_shader = lighting_shader;
-    Shader lighting_shader_sphere = Shader("shaders/lighting_dither2.vert","shaders/lighting_dither2.frag");
-    // Shader wireframe_shader("shaders/wf.vert","shaders/wf.frag","shaders/wf.geom");
-
     // create the VAO and VBO for the full-screen quad
     create_quad_vao(&quadVAO, &quadVBO, quadVertices,sizeof(float)*24);
 
     char title[256];
     int n_frame = 0;
-
     
     create_framebuffer(&scene.blue_sphere_fb,&scene.blue_sphere_tex,&scene.blue_sphere_db,1280,720);
     create_framebuffer(&scene.bayer_sphere_fb,&scene.bayer_sphere_tex,&scene.bayer_sphere_db,1280,720);
-    // glEnable(GL_CULL_FACE);
-    // RENDER LOOP
 
+    std::cout << "Setting up rendering elements..." << std::endl;
+    //SETUP OF RENDER OBJECTS FOR PIPELINA
+    Shader lighting_shader = Shader("shaders/lighting_dither.vert","shaders/lighting_dither.frag");
+    Shader lighting_shader_sphere = Shader("shaders/lighting_dither2.vert","shaders/lighting_dither2.frag");
     Shader shadow_map_shader = Shader("shaders/19_shadowmap.vert","shaders/20_shadowmap.frag");
     LightingPass lighting_pass = LightingPass(renderWidth,renderHeight,&lighting_shader, &shadow_map_shader,shadow_map_resolution);
+
+    Shader edge_accentuation_shader = Shader("shaders/edge_accentuate.vert","shaders/edge_accentuate.frag");
     EdgeAccentuation edge1_pass = EdgeAccentuation(renderWidth,renderHeight,&edge_accentuation_shader);
+
+    Shader edge_accentuation2_shader = Shader("shaders/edge_accentuate2.vert","shaders/edge_accentuate2.frag");
     EdgeAccentuation2 edge2_pass = EdgeAccentuation2(renderWidth,renderHeight,&edge_accentuation2_shader);
 
-    std::cout << "Test scene loaded. Entering Render Loop..." << std::endl;
+    Shader wireframe_shader = Shader("shaders/wf.vert","shaders/wf.frag","shaders/wf.geom");
+    Wireframe wireframe = Wireframe(renderWidth,renderHeight, &wireframe_shader, &edge2_pass);
+
+    // SETUP OF THE FRAMEBUFFERS FOR THE POST PROCESSING PIPELINE
+
+    std::cout << "Setting up post processing elements..." << std::endl;
+    Shader edge_detect_shader("shaders/edge_detect.vert", "shaders/edge_detect_aa.frag");
+    Shader edge_detect2_shader("shaders/edge_detect2.vert", "shaders/edge_detect2.frag");
+    GLuint edge_detect_fb, edge_detect_tex, edge_detect_db;
+    create_framebuffer(&edge_detect_fb,&edge_detect_tex,&edge_detect_db,renderWidth,renderHeight);
+
+    Shader combine_shader("shaders/combine.vert", "shaders/combine.frag");
+    GLuint combine_fb, combine_tex, combine_db;
+    create_framebuffer(&combine_fb,&combine_tex,&combine_db,renderWidth,renderHeight);
+
+    Shader upscale_shader("shaders/nearest_upscale.vert", "shaders/nearest_upscale.frag");
+
+    std::cout << "Everything loaded. Entering Render Loop..." << std::endl;
     while(!glfwWindowShouldClose(window)){
         n_frame++;
         update_deltatime();
@@ -139,8 +134,8 @@ int main(){
             selected_scene->point_lights[1].position[2] = new_pos;
             selected_scene->objects[13].set_position(selected_scene->point_lights[1].position);
         }
-        /////////////////////////////////
 
+        // TODO OUTDATED!!
         /*  Render pipeline:
           1. render the scene at a low resolution with lighting only
           2a. render the scene at a low resolution with accentuated edges
@@ -150,34 +145,25 @@ int main(){
           5. upscale to screen resolution with nearest neighbor to keep the pixelated look*/
 
         // 1. lighting render pass
-        // glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        
-        // selected_scene->full_render({}, LIGHTING, lighting_fb, renderWidth,renderHeight);
         lighting_pass.render(selected_scene);
 
         // 2. edge-accentuating render pass
-        // selected_scene->full_render({},EDGE_ACCENTUATION, edge_fb, renderWidth,renderHeight);
         edge1_pass.render(selected_scene);
         if(!thin_outline){
-            // selected_scene->full_render({},EDGE_ACCENTUATION2, edge2_fb, renderWidth,renderHeight);
             edge2_pass.render(selected_scene);
         }
         if(thin_outline){
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            selected_scene->full_render({},WIREFRAME, edge2_fb, renderWidth,renderHeight);
+            wireframe.render(selected_scene);
             glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
 
         // 3. edge detection pass
-        // post_process(edge_detect_fb, {edge_tex}, {"lowResTexture"}, edge_detect_shader, renderWidth, renderHeight);
         if (!thin_outline)
             post_process(edge_detect_fb, {*edge1_pass.get_texture(), *edge2_pass.get_texture(), selected_scene->blue_noise}, {"edge1_texture", "edge2_texture", "blue_noise"}, edge_detect_shader, renderWidth, renderHeight);
+        else 
+            post_process(edge_detect_fb, {*edge1_pass.get_texture(), *edge1_pass.get_depth_buffer(), *edge2_pass.get_texture()}, {"colorTexture", "depthTexture", "wireframeTexture"}, edge_detect2_shader, renderWidth, renderHeight);
 
-        if (thin_outline)
-            post_process(edge_detect_fb, {edge_tex, edge_db, edge2_tex}, {"colorTexture", "depthTexture", "wireframeTexture"}, edge_detect2_shader, renderWidth, renderHeight);
-
-        // post_process(edge_detect_fb, {lighting_tex, edge2_tex}, {"u_ColorTexture", "u_NormalTexture"}, edge_detect_shader, renderWidth, renderHeight);
-        
         // 4. combination pass (lighting + edge detection's outline)
         post_process(combine_fb, {*lighting_pass.get_texture(), edge_detect_tex}, {"lightingTexture", "edgeTexture"}, combine_shader, renderWidth, renderHeight);
         

@@ -23,12 +23,6 @@ public:
     static constexpr float FAR_PLANE = 10000.0f;
     static glm::mat4 projection_matrix;
 
-    // to clean up, this should be in main
-    Shader edge_accentuation_shader = Shader("shaders/edge_accentuate.vert","shaders/edge_accentuate.frag");
-    Shader edge_accentuation2_shader = Shader("shaders/edge_accentuate2.vert","shaders/edge_accentuate2.frag");
-    Shader wireframe_shader = Shader("shaders/wf.vert","shaders/wf.frag","shaders/wf.geom");
-    // Shader lighting_shader = Shader("shaders/lighting_dither.vert","shaders/lighting_dither.frag");
-    Shader lighting_shader = Shader("shaders/lighting_dither2.vert","shaders/lighting_dither.frag");
     vector<Object> objects;
     // Shader* current_shader;
     // RenderMode current_rendermode;
@@ -48,6 +42,7 @@ public:
     float pvbl = 10.0;
     bool use_sphere_dithering = false;
 
+    // TODO MOVE EVERYTHING REGARDING DITHER SPHERE ON LIGHTINGPASS CLASS 
     Object dither_sphere = Object(camera.Position, "models/ICOuv.obj",DITHER_SPHERE);
     GLuint blue_sphere_fb, blue_sphere_tex, blue_sphere_db;
     Shader blue_sphere_shader = Shader("shaders/sphere2.vert","shaders/sphere2.frag");
@@ -161,44 +156,6 @@ public:
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    void set_object_uniforms(Object* obj, RenderMode current_rendermode, Shader* current_shader, int i){
-        glBindTexture(GL_TEXTURE_2D, 0);
-        current_shader->set_uniform1f("textured",0.0);
-        current_shader->set_uniform1i("dust",0);
-        glm::mat4 model_matrix = obj->model_matrix;
-        current_shader->set_uniformMatrix4fv("modelMatrix", obj->model_matrix);
-        if (current_rendermode != SHADOWMAP){
-            glm::mat4 view_matrix = camera.GetViewMatrix();
-            current_shader->set_uniformMatrix4fv("viewMatrix", view_matrix);
-            glm::mat4 projection_matrix = this->projection_matrix;
-            current_shader->set_uniformMatrix4fv("projectionMatrix", projection_matrix);
-            glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(view_matrix * model_matrix)));
-            current_shader->set_uniformMatrix3fv("normalMatrix", normal_matrix);
-        }
-    }
-    // rendering of the whole scene based on render mode
-    void full_render(const std::map<std::string, UniformValue>& uniform_values, RenderMode mode, GLuint buffer, int render_width, int render_height) {
-        Shader* current_shader;
-        glDepthFunc(GL_LESS); 
-        glDepthMask(GL_TRUE);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glBindFramebuffer(GL_FRAMEBUFFER, buffer);
-        glViewport(0, 0, render_width, render_height);
-        if (mode == WIREFRAME){
-            full_render({}, EDGE_ACCENTUATION2, buffer, render_width,render_height);
-            glDepthMask(GL_FALSE);
-            current_shader = &wireframe_shader;
-            current_shader->Use();
-        }
-        // render objects
-        for (GLuint i = 0; i < objects.size(); i++) {
-            Object* object = &objects[i];
-            if (mode != EDGE_ACCENTUATION2 && object->material == DUST) continue;
-            set_object_uniforms(object,mode,current_shader,i);
-            object->draw();
-            glBindTexture(GL_TEXTURE_2D, 0);
-        }
-    }
 private:
 
 };

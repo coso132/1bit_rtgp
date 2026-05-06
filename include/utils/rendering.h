@@ -289,17 +289,21 @@ private:
 
 class Wireframe:public RenderPass{
 public:
+    EdgeAccentuation2* edge2;
     // for directional light
-    Wireframe(int render_width, int render_height, Shader* shader) {
+    Wireframe(int render_width, int render_height, Shader* shader, EdgeAccentuation2* edge2) {
         create_framebuffer(&buffer,&texture,&depth_buffer,render_width,render_height);
         this->render_width = render_width;
         this->render_height = render_height;
         this->shader = shader;
+        this->edge2 = edge2;
    }
     void render(Scene* scene) override{
+        edge2->render(scene);
+        glDepthMask(GL_FALSE);
+
         // reset render parameters
-        glDepthFunc(GL_LESS); 
-        glDepthMask(GL_TRUE);
+        // glDepthFunc(GL_LESS); 
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, buffer);
         glViewport(0, 0, render_width, render_height);
@@ -311,6 +315,7 @@ public:
         // render objects
         for (GLuint i = 0; i < scene->objects.size(); i++) {
             Object* object = &scene->objects[i];
+            if (object->material == DUST) continue;
             set_object_uniforms(scene,object,i);
             object->draw();
         }
@@ -322,21 +327,6 @@ private:
         // glBindTexture(GL_TEXTURE_2D, 0);
         shader->set_uniform1f("textured",0.0);
         shader->set_uniform1i("dust",0);
-
-        if (obj->material == COMPLEX)
-            {shader->set_uniform1f("fill_in", 1.0f);}
-        else 
-            {shader->set_uniform1f("fill_in", 0.0f);}
-        shader->set_uniform1f("object_id_in", (float)(i+1));
-
-        // normal texture uniforms
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, obj->normal_texture);
-        shader->set_uniform1i("normal_tex",1);
-        shader->set_uniform1f("repeat",1.0);
-        shader->set_uniform1f("textured",1.0);
-        shader->set_uniform1i("dust", obj->material == DUST);
-       
         // obvious mvp matrixes
         glm::mat4 model_matrix = obj->model_matrix;
         shader->set_uniformMatrix4fv("modelMatrix", obj->model_matrix);
