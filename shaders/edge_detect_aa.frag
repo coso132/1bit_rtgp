@@ -1,7 +1,7 @@
 // this shader will be used to detect edges in the low-res render, and output a texture where the edges are white and the rest is black. 
 // this uses a simple edge detaction algorithm based on the difference in color between neighboring pixels.
 #version 410 core
-
+//TODO COMMENT
 in vec2 TexCoord;
 out vec4 FragColor;
 

@@ -14,7 +14,7 @@
 
 GLFWwindow* setup_openGL(int* width, int* height, GLFWkeyfun key_callback, GLFWcursorposfun mouse_callback, bool vsync);
 
-// TODO move 
+// TODO  check if this header files contains the actual functions it should contain
 GLint LoadTexture(const char* path);
 
 int create_quad_vao(GLuint* vao, GLuint* vbo, float*, unsigned long size) ;

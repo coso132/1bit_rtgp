@@ -9,6 +9,7 @@
 // #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
 
+// TODO EXPLAIN WHOLE FILE GANG
 enum Material {
     SIMPLE,
     COMPLEX,
@@ -22,6 +23,7 @@ enum NoiseType{
     NONE,   // unused
 };
 // different possible render passes
+// TODO I REALLY DO NOT THINK THIS SHOULD BE HERE AT THIS POINT IS THIS EVEN USEFULE
 enum RenderMode {
     LIGHTING,
     EDGE_ACCENTUATION,

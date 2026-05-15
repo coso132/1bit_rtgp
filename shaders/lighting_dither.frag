@@ -1,5 +1,5 @@
 #version 410 core
-
+//TODO COMMENT 
 out vec4 colorFrag;
 
 in vec3 N;
@@ -109,10 +109,11 @@ void main(){
     rawDiffuse = smoothstep(0.3,0.8,rawDiffuse);
     float diffuse = rawDiffuse;
     // tex_value = floor(tex_value * 3.0)/3.0;
-    lighting_value = diffuse * tex_value;
+    // lighting_value = diffuse * tex_value;
     lighting_value = floor(lighting_value * 3.0)/3.0;
     // tex_value = floor(tex_value * 3.0)/3.0;
     lighting_value = dither(diffuse * tex_value, dither_map, width, height);
+    tex_value = dither(tex_value, dither_map, width, height);
 
     red = lighting_value;
     green = tex_value;

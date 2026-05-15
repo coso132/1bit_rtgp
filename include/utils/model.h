@@ -58,6 +58,7 @@ public:
         for(GLuint i = 0; i < this->meshes.size(); i++)
             this->meshes[i].Draw();
     }
+    //TODO EXPLAIN`
     void DrawPoints(int n)
     {
         for(GLuint i = 0; i < this->meshes.size(); i++)

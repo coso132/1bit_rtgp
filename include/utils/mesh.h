@@ -135,6 +135,7 @@ public:
         // VAO is "detached"
         glBindVertexArray(0);
     }
+    //TODO EXPLAIN
     void DrawPoints(int n)
     {
         // VAO is made "active"

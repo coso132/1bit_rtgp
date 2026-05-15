@@ -14,6 +14,7 @@ const float kernel[9] = float[](
     -1, -1, -1
 );
 
+//TODO COMMENT
 void main() {
 
     FragColor = vec4(vec3(texture(edge2_texture, TexCoord)), 1.0);

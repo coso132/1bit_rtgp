@@ -27,7 +27,7 @@ out vec4 FragColor;
 //     float finalIntensity = (diffuse > threshold) ? 1.0 : 0.0;
 //     return vec4(vec3(finalIntensity), 1.0);
 // }
-
+//TODO COMMENT
 void main() { 
     vec4 normal_color = texture(normal_tex,interp_UV);
     FragColor = normal_color;

@@ -5,6 +5,7 @@ uniform sampler2D colorTexture;
 uniform sampler2D depthTexture;
 uniform sampler2D wireframeTexture;
 
+//TODO COMMENT
 uniform sampler2D dust;
 uniform sampler2D blue_noise;
 

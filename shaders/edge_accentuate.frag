@@ -3,6 +3,7 @@
 // // this fragment shader creates flatshaded accentuated colors to make edges more visible.
 #version 410 core
 
+//TODO COMMENT
 out vec4 colorFrag;
 flat in vec3 N; // normal (should be flat per face)
 in vec3 pos; // view space coordinates of entire object (should be flat per face)

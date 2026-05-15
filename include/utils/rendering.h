@@ -1,15 +1,9 @@
 #pragma once
 
-// #include <utils/model.h>
-// #include <utils/shader.h>
-// #include <utils/camera.h>
-// #include <utils/light.h>
-// #include <utils/sceneobject.h>
-// #include <utils/misc.h>
-// #include <utils/rendering.h>
 #include <utils/scene.h>
 
 
+//TODO proper comments everywher
 // idea for how to do render passes
 class RenderPass {
 public:
@@ -75,19 +69,36 @@ class LightingPass:public RenderPass{
 public:
     // for directional light
     ShadowMap shadow_map;
-
+    // pattern repetition factor for blue noise and bayer dither sphere
+    float pvby = 24.0;
+    float pvbl = 10.0;
+    bool use_sphere_dithering = false;
+    // dither textures
+    GLuint blue_noise;
+    GLuint bayer_noise;
+    // dither sphere buffers
+    GLuint blue_sphere_fb, blue_sphere_tex, blue_sphere_db;
+    GLuint bayer_sphere_fb, bayer_sphere_tex, bayer_sphere_db;
+ 
     LightingPass(int render_width, int render_height, Shader* lighting_shader, Shader* shadow_map_shader, int shadow_map_resolution): shadow_map(shadow_map_resolution, shadow_map_shader){
         create_framebuffer(&buffer,&texture,&depth_buffer,render_width,render_height);
         this->render_width = render_width;
         this->render_height = render_height;
         this->shader = lighting_shader;
+        blue_noise = load_image("textures/blue_noise.png");
+        bayer_noise = load_image("textures/bayer_noise.png");
+        m = dither_sphere.model_matrix;
+        create_framebuffer(&blue_sphere_fb,&blue_sphere_tex,&blue_sphere_db,1280,720); //TODO MAGIC NUMBER
+        create_framebuffer(&bayer_sphere_fb,&bayer_sphere_tex,&bayer_sphere_db,1280,720);
    }
     void render(Scene* scene) override{
+        v = scene->camera.GetViewMatrix();
+        p = scene->projection_matrix;
         // update shadowmap
         shadow_map.render(scene);
         // update spheres
-        scene->update_blue_sphere_cubemap();
-        scene->update_bayer_sphere_cubemap();
+        update_blue_sphere_cubemap(scene);
+        update_bayer_sphere_cubemap(scene);
 
         // reset render parameters
         glDepthFunc(GL_LESS); 
@@ -129,6 +140,82 @@ public:
         }
     }
 private:
+    
+
+    // dither sphere buffers
+    GLuint blue_noise_sphere;
+    GLuint bayer_noise_sphere;
+
+    // TODO MOVE EVERYTHING REGARDING DITHER SPHERE ON LIGHTINGPASS CLASS 
+    Object dither_sphere = Object(glm::vec3(0.0,0.0,0.0), "models/ICOuv.obj",DITHER_SPHERE);
+    Shader blue_sphere_shader = Shader("shaders/sphere2.vert","shaders/sphere2.frag");
+    Shader bayer_sphere_shader = Shader("shaders/sphere2.vert","shaders/sphere2.frag");
+    glm::mat4 m;
+    glm::mat4 v;
+    glm::mat4 p;
+
+
+
+    void update_blue_sphere_cubemap(Scene* scene){
+        glDepthFunc(GL_LESS); 
+        glDepthMask(GL_TRUE);
+        // glBindTexture(GL_TEXTURE_2D, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, blue_sphere_fb);
+        glViewport(0, 0, 1280, 720);
+        // glViewport(0, 0, 640, 360);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        blue_sphere_shader.Use();
+        // glActiveTexture(GL_TEXTURE0);
+        // glBindTexture(GL_TEXTURE_CUBE_MAP, blue_noise_sphere);
+        // sphere_shader.set_uniform1i("uCubemap",0);
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, blue_noise);
+        blue_sphere_shader.set_uniform1i("noise",0);
+        blue_sphere_shader.set_uniform1f("tile",pvbl);
+        dither_sphere.pos = scene->camera.Position;
+        // dither_sphere.set_position(camera.Position);
+        glm::mat4 viewRot = glm::mat4(glm::mat3(scene->camera.GetViewMatrix())); // rotation only
+        glm::mat4 model = glm::mat4(1.0f);                   // identity
+
+        glm::mat4 mvp = scene->projection_matrix * viewRot * model;
+
+        blue_sphere_shader.set_uniformMatrix4fv("mvp", mvp);
+        dither_sphere.model.Draw();
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    void update_bayer_sphere_cubemap(Scene* scene){
+        glDepthFunc(GL_LESS); 
+        glDepthMask(GL_TRUE);
+        // glBindTexture(GL_TEXTURE_2D, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, bayer_sphere_fb);
+        glViewport(0, 0, 1280, 720);
+        // glViewport(0, 0, 640, 360);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        bayer_sphere_shader.Use();
+        // glActiveTexture(GL_TEXTURE0);
+        // glBindTexture(GL_TEXTURE_CUBE_MAP, bayer_noise_sphere);
+        // sphere_shader.set_uniform1i("uCubemap",0);
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, bayer_noise);
+        bayer_sphere_shader.set_uniform1i("noise",0);
+        bayer_sphere_shader.set_uniform1f("tile",pvby);
+        dither_sphere.pos = scene->camera.Position;
+        // dither_sphere.set_position(camera.Position);
+        glm::mat4 viewRot = glm::mat4(glm::mat3(scene->camera.GetViewMatrix())); // rotation only
+        glm::mat4 model = glm::mat4(1.0f);                   // identity
+
+        glm::mat4 mvp = scene->projection_matrix * viewRot * model;
+
+        bayer_sphere_shader.set_uniformMatrix4fv("mvp", mvp);
+        dither_sphere.model.Draw();
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
     void set_object_uniforms(Scene* scene, Object* obj, int i) {
         
         // reset texutred or dust status
@@ -145,9 +232,9 @@ private:
         shader->set_uniform1i("noise_type",obj->noise_type);
 
         // dither uniforms
-        GLuint dither_map = (scene->use_sphere_dithering?(obj->noise_type==BAYER? scene->bayer_sphere_tex : scene->blue_sphere_tex):(obj->noise_type==BAYER? scene->bayer_noise:scene->blue_noise));
-        float dither_width = scene->use_sphere_dithering? 640 :(obj->noise_type==BAYER?16:64);
-        float dither_height = scene->use_sphere_dithering? 360 :(dither_width);
+        GLuint dither_map = (use_sphere_dithering?(obj->noise_type==BAYER? bayer_sphere_tex : blue_sphere_tex):(obj->noise_type==BAYER? bayer_noise:blue_noise));
+        float dither_width = use_sphere_dithering? 640 :(obj->noise_type==BAYER?16:64);
+        float dither_height = use_sphere_dithering? 360 :(dither_width);
         glActiveTexture(GL_TEXTURE2);
         glBindTexture(GL_TEXTURE_2D, dither_map); 
         shader->set_uniform1i("dither_map",2);
