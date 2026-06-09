@@ -14,7 +14,10 @@ Scene load_test_scene(){
         DUST,
         "models/cossack/Material_Base_Color.png",
         BLUE_NOISE,
-        1.0f));
+        1.0f,
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        0.0f,
+        60));
     objects[0].LoadNormalTexture("models/cossack/Material_Normal.png");
     objects.push_back(Object(
         glm::vec3( 15.0f, 0.0f,-15.0f), 
@@ -142,7 +145,10 @@ Scene load_test_scene(){
     //     DUST, 
     //     "textures/white.png",  // texture 
     //     BLUE_NOISE,                          // noise type
-    //     20.5f));
+    //     20.5f,
+    //     glm::vec3( 0.0f, 0.0f, 1.0f),
+    //     0.0f,
+    //     6000));
     // objects.push_back(Object(glm::vec3( 0.0f, -100.0f,-100.0f), "models/city/OBJ/Amaryllis City.obj", SIMPLE, 0.01f));
     Camera camera(glm::vec3(0.0f, 0.0f, 7.0f), false);
     DirectionalLight directional_light(glm::vec3(1.0, -0.6,0.0), 50.0f);

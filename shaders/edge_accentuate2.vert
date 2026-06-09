@@ -60,36 +60,27 @@ void main(){
         vec3 objTang = normalize(tangent);
         vec3 objBitang = normalize(cross(objNorm, objTang)); // force orthonormal
 
-        // uint seed = uint(gl_VertexID) ^ (uint(gl_InstanceID) << 16);
-
-        // float randRadial = float(seed % 10000) / 10000.0;
-        // float randTang   = float((seed * 1597) % 10000) / 10000.0;
-        // float randBitang = float((seed * 2861) % 10000) / 10000.0;
-        // Random values per instance (or vertex)
-        // float randRadial = fract(float(gl_InstanceID) * 13.56788);
-        // float randTang   = fract(float(gl_InstanceID) * 29.34567);
-        // float randBitang = fract(float(gl_InstanceID) * 46.89123);
-
+        // generate random offsets based on vertex and instance ID
         uint id = uint(gl_VertexID) * 1597 + uint(gl_InstanceID);
         float randRadial = random(id);
         float randTang   = random(id + 12345);
         float randBitang = random(id + 67890);
-        // Range: radial offset moves inward (0 = at surface, 1 = at center)
-        float radialAmount = 1.0-(pow(randRadial, 1.0/3.0));              // 0..1, adjust max if needed
-        // Perpendicular deviation range (in object units, sphere radius = 1)
-        float devAmount = 0.3;                        // tweak this for cloud thickness
+        // range: radial offset moves inward (0 = at surface, 1 = at center)
+        float radialAmount = 1.0-(pow(randRadial, 1.0/3.0)); // 0..1, adjust max if needed
+        // perpendicular deviation range (in object units, sphere radius = 1)
+        float devAmount = 0.3; // tweak this for cloud thickness
 
-        // Convert to symmetric range [-devAmount/2, devAmount/2]
+        // convert to symmetric range [-devAmount/2, devAmount/2]
         float tOffset = (randTang - 0.5) * devAmount;
         float bOffset = (randBitang - 0.5) * devAmount;
 
-        // New object space position
+        // new object space position
         vec3 newObjPos = objPos
                         - objNorm * radialAmount      // move inward
                         + objTang * tOffset           // random tangent
                         + objBitang * bOffset;        // random bitangent
 
-        // Transform to clip space as usual
+        // transform to clip space as usual
         vec4 worldPos = modelMatrix * vec4(newObjPos, 1.0);
         gl_Position = projectionMatrix * viewMatrix * worldPos;
     }

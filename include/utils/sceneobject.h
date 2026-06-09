@@ -46,14 +46,16 @@ public:
     Model model;
     NoiseType noise_type{BAYER};
     float scale{1.0f};
+    int density {6}; // only for dust, controls the number of points drawn
 
-    Object(glm::vec3 pos, const string& model_filepath, Material material, const char* texture_filepath, NoiseType noise_type, float scale, glm::vec3 rotate = glm::vec3(0.0f,1.0f,0.0f), float radians=0.f) 
-        : pos(pos), material(material), model(model_filepath), noise_type(noise_type) {
+    Object(glm::vec3 pos, const string& model_filepath, Material material, const char* texture_filepath, NoiseType noise_type, float scale, glm::vec3 rotate = glm::vec3(0.0f,1.0f,0.0f), float radians=0.f, int density=6) 
+        : pos(pos), material(material), model(model_filepath), noise_type(noise_type), density(density) {
         LoadTexture(texture_filepath);
         this->model_matrix = glm::translate(glm::mat4(1.0f), this->pos);
         this->model_matrix = glm::scale(this->model_matrix, glm::vec3(scale));
         this->model_matrix = glm::rotate(this->model_matrix, radians, rotate);
         this->scale = scale;
+        this->density = density;
     }
     Object(glm::vec3 pos, const string& filepath, Material material) 
         : pos(pos), material(material), model(filepath) {
@@ -80,7 +82,7 @@ public:
 
     void draw(){
         if (material == DUST)
-            this->model.DrawPoints((int)(6*this->scale));
+            this->model.DrawPoints((int)(this->density));
         else 
             this->model.Draw();
     }

@@ -9,7 +9,7 @@ uniform sampler2D edge1_texture;
 uniform sampler2D edge2_texture;
 uniform sampler2D blue_noise;
 
-// Edge detection kernel (Laplacian)
+// edge detection kernel (Laplacian)
 const float kernel[9] = float[](
     -1, -1, -1,
     -1,  8, -1,
@@ -17,20 +17,15 @@ const float kernel[9] = float[](
 );
 
 void main() {
+    // check if fragment is dust and return white if it is, 
+    // so that it is not affected by edge detection and remains visible
     vec3 color = texture(edge2_texture, TexCoord).rgb;
     if (color.b >= 1.0 && color.r <=0.0 && color.g <=0.0 ){
-        float threshold = 0.7;
-        // float diffuse = (texture(blue_noise, TexCoord)).r;
-        float diffuse = (texture(blue_noise, TexCoord*121.438)).r;
-        float finalIntensity = (diffuse > threshold) ? 1.0 : 0.0;
-        FragColor = vec4(vec3(finalIntensity), 1.0);
-        // FragColor = vec4(vec3(diffuse), 1.0);
         FragColor = vec4(vec3(1.0), 1.0);
         return;
     }
 
-    // ----- First edge source -----
-
+    // apply edge detection to edge1_texture
     vec2 tex_offset = 1.0 / textureSize(edge1_texture, 0);
     vec3 result = vec3(0.0);
     for (int i = -1; i <= 1; i++) {
@@ -41,29 +36,9 @@ void main() {
     }
     float edge_strength1 = length(result);
     
-    // Soft threshold with anti‑aliasing (transition band = 0.1)
+    // soft threshold with antialiasing 
     float edge_threshold1 = 0.6;
     float alpha1 = smoothstep(edge_threshold1 - 0.1, edge_threshold1 + 0.1, edge_strength1);
     vec4 result1 = vec4(vec3(alpha1), 1.0);   // white on black, intensity varies smoothly
     FragColor = result1;
-
-    // // ----- Second edge source -----
-    // tex_offset = 1.0 / textureSize(edge2_texture, 0);
-    // result = vec3(0.0);
-    // for (int i = -1; i <= 1; i++) {
-    //     for (int j = -1; j <= 1; j++) {
-    //         vec2 offset = vec2(float(i), float(j)) * tex_offset;
-    //         result += texture(edge2_texture, TexCoord + offset).rgb * kernel[(i+1)*3 + (j+1)];
-    //     }
-    // }
-    // float edge_strength2 = length(result);
-    
-    // float edge_threshold2 = 0.90;
-    // float alpha2 = smoothstep(edge_threshold2 - 0.1, edge_threshold2 + 0.1, edge_strength2);
-    // vec4 result2 = vec4(vec3(alpha2), 1.0);
-
-    // // Combine both edges (use max to avoid double brightening, but add works too)
-    // vec4 finalEdge = max(result1, result2);
-    // // Optional: blend with original colour? For now, white outline on black.
-    // FragColor = finalEdge;
 }

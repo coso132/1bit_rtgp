@@ -21,13 +21,13 @@ bool sphere_dither = false;
 int shadow_map_resolution = 2048;
 
 float pattern_value_blue = 10.0;
-float pattern_value_bayer = 30.0;
+float pattern_value_bayer = 28.0;
 
 int screenWidth = 1920, screenHeight = 1080;
-GLuint factor = 40;
+// GLuint factor = 60;
 // GLuint renderWidth = 16*factor, renderHeight = 9*factor;
 // GLuint renderWidth = screenWidth, renderHeight = screenHeight;
-GLuint renderWidth = 640, renderHeight = 360;
+GLuint renderWidth = 800, renderHeight = 450;
 //////////////////////////////////////
 
 GLfloat fps, current_time, last_time,delta_time = 1.0f;
@@ -105,13 +105,27 @@ int main(){
     std::cout << "Everything loaded. Entering Render Loop..." << std::endl;
     char title[256];
     int n_frame = 0;
+
+    // array to store previous frame times for fps calculation
+    const int frame_time_array_size = 100;
+    float frame_times[frame_time_array_size] = {0};
+    int frame_time_index = 0;
     while(!glfwWindowShouldClose(window)){
         n_frame++;
         update_deltatime();
-        // update title every 60 frames
-        if (n_frame >= 60) {
+        // update title every x frames
+        if (n_frame >= 100) {
+            // calculate fps and average frame time
+            frame_times[frame_time_index] = delta_time;
+            frame_time_index = (frame_time_index + 1) % frame_time_array_size;
+            float average_frame_time = 0.0f;
+            for (int i = 0; i < frame_time_array_size; i++) {
+                average_frame_time += frame_times[i];
+            }
+            average_frame_time /= frame_time_array_size;
+            fps = 1.0f / average_frame_time;
             n_frame = 0;
-            snprintf(title, sizeof(title), "FPS: %.0f, Frame Time: %.2f ms", fps, delta_time * 1000.0f);
+            snprintf(title, sizeof(title), "FPS: %.0f, Frame Time: %.2f ms", fps, average_frame_time * 1000.0f);
             glfwSetWindowTitle(window, title);
         }
         glfwPollEvents();
@@ -134,16 +148,6 @@ int main(){
             selected_scene->point_lights[1].position[2] = new_pos;
             selected_scene->objects[13].set_position(selected_scene->point_lights[1].position);
         }
-
-        // TODO OUTDATED!!
-        /*  Render pipeline:
-          1. render the scene at a low resolution with lighting only
-          2a. render the scene at a low resolution with accentuated edges
-          2b. render the scene at a low resolution with normal maps 
-          3. apply edge detection to edge accentuated render and normal maps and combine them
-          4. combine the edge detection's output with the lighting render to get the final low-res render
-          5. upscale to screen resolution with nearest neighbor to keep the pixelated look*/
-
 
         // 1. lighting render pass
         lighting_pass.render(selected_scene);
